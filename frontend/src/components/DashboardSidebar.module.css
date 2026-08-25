@@ -12,10 +12,12 @@
 }
 
 .brandMark {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--foreground);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  display: block;
 }
 
 .navList {
