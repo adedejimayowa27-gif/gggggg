@@ -30,7 +30,7 @@ export default function DashboardSidebar({ onNavigate }: Props) {
   return (
     <nav className={styles.sidebar} aria-label="Dashboard navigation">
       <div className={styles.brand}>
-        <span className={styles.brandMark}>BizIntel</span>
+        <span className={styles.brandMark}>Mayorcity Bizintel</span>
       </div>
 
       <ul className={styles.navList}>
