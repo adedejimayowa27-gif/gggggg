@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # --- App ---
-    APP_NAME: str = "BizIntel Platform"
+    APP_NAME: str = "Mayorcity Bizintel"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
