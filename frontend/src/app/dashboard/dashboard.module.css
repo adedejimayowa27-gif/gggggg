@@ -1,13 +1,16 @@
 .shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
   background: var(--background);
+  overflow: hidden;
 }
 
 .sidebarDesktop {
   width: 240px;
   flex-shrink: 0;
   display: none;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .main {
@@ -15,11 +18,13 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
 }
 
 .content {
   flex: 1;
-  padding: 1.5rem;
+  padding: 1.25rem;
+  overflow-y: auto;
 }
 
 .centered {
@@ -46,10 +51,17 @@
   z-index: 50;
   transform: translateX(-100%);
   transition: transform 0.2s ease;
+  overflow-y: auto;
 }
 
 .drawerOpen {
   transform: translateX(0);
+}
+
+@media (min-width: 640px) {
+  .content {
+    padding: 1.75rem;
+  }
 }
 
 @media (min-width: 900px) {
