@@ -1,4 +1,4 @@
-# BizIntel Platform — Step 1: Project Foundation
+# Mayorcity Bizintel — Step 1: Project Foundation
 
 AI-powered Business Intelligence & Simulator platform for SMBs.
 This step builds the foundation only: project scaffolding, database
