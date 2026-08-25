@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bizintel_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bizintel_user
+      POSTGRES_PASSWORD: bizintel_pass
+      POSTGRES_DB: bizintel_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - bizintel_pgdata:/var/lib/postgresql/data
+
+volumes:
+  bizintel_pgdata:
