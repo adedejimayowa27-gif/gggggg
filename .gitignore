@@ -1,0 +1,22 @@
+# --- Python / backend ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+backend/.env
+
+# --- Node / frontend ---
+node_modules/
+.next/
+out/
+frontend/.env
+frontend/.env.local
+
+# --- OS / editor ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- Logs ---
+*.log
