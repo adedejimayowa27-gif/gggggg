@@ -3,7 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
-  title: "BizIntel — AI Business Intelligence for SMBs",
+  title: "Mayorcity Bizintel — AI Business Intelligence for SMBs",
   description:
     "Understand your business, forecast the future, and simulate decisions before you make them.",
 };
