@@ -1,0 +1,104 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  height: 64px;
+  border-bottom: 1px solid #1f2430;
+  background: #0b0e14;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.menuButton {
+  display: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #1f2430;
+  background: transparent;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.menuIcon {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: var(--foreground);
+  position: relative;
+}
+
+.menuIcon::before,
+.menuIcon::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 16px;
+  height: 2px;
+  background: var(--foreground);
+}
+
+.menuIcon::before {
+  top: -5px;
+}
+
+.menuIcon::after {
+  top: 5px;
+}
+
+.businessName {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeholder {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.userEmail {
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: none;
+}
+
+.logoutButton {
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid #2a2f3a;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+@media (min-width: 640px) {
+  .userEmail {
+    display: inline;
+  }
+}
+
+@media (max-width: 899px) {
+  .menuButton {
+    display: flex;
+  }
+}
