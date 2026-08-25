@@ -1,0 +1,63 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0d1017;
+  border-right: 1px solid #1f2430;
+  padding: 1.25rem 0.75rem;
+}
+
+.brand {
+  padding: 0.5rem 0.75rem 1.5rem;
+}
+
+.brandMark {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--foreground);
+  letter-spacing: -0.02em;
+}
+
+.navList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.navLink:hover {
+  background: #161b26;
+  color: var(--foreground);
+}
+
+.navLinkActive {
+  background: #1a2236;
+  color: var(--foreground);
+}
+
+.navLinkDisabled {
+  opacity: 0.55;
+}
+
+.badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  background: #1f2430;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
