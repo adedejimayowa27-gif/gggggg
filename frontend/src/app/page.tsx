@@ -14,7 +14,7 @@ export default function Home() {
         gap: "1.5rem",
       }}
     >
-      <h1 style={{ fontSize: "2rem", fontWeight: 700 }}>BizIntel Platform</h1>
+      <h1 style={{ fontSize: "2rem", fontWeight: 700 }}>Mayorcity Bizintel</h1>
       <p style={{ color: "var(--muted)", maxWidth: 480 }}>
         Project foundation is running. The full landing page, AI assistant,
         forecasting, and simulator are built in later steps — for now you can
