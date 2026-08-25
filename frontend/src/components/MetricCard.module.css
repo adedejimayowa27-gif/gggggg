@@ -1,0 +1,44 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.25rem;
+  border-radius: 10px;
+  border: 1px solid #1f2430;
+  background: #11151d;
+  min-width: 0;
+}
+
+.iconWrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #1a2236;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.emptyValue {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #3a4152;
+}
+
+.emptyText {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--foreground);
+}
