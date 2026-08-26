@@ -11,15 +11,15 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func
+from sqlalchemy import Date, func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_owned_business
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.transaction import Transaction
-from app.schemas.analytics import AnalyticsSummary
-from app.services.analytics import DateRangePreset, resolve_date_range
+from app.schemas.analytics import AnalyticsSummary, AnalyticsTimeseries, TimeseriesPoint
+from app.services.analytics import DateRangePreset, Granularity, resolve_date_range
 
 router = APIRouter(prefix="/businesses/{business_id}/analytics", tags=["analytics"])
 
@@ -81,4 +81,60 @@ def get_analytics_summary(
         units_sold=units_sold,
         transaction_count=transaction_count,
         average_transaction_value=average_transaction_value,
+    )
+
+
+@router.get("/timeseries", response_model=AnalyticsTimeseries)
+def get_analytics_timeseries(
+    range: DateRangePreset = Query(default=DateRangePreset.LAST_30D),
+    start_date: date_type | None = Query(default=None),
+    end_date: date_type | None = Query(default=None),
+    granularity: Granularity = Query(default=Granularity.DAY),
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
+
+    # date_trunc buckets by the given granularity; cast back to Date so the
+    # response schema (and the client) get plain dates, not timestamps.
+    period_expr = func.date_trunc(granularity.value, Transaction.date).cast(Date)
+
+    revenue_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.selling_price), 0
+    )
+    cost_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.cost_price), 0
+    )
+
+    rows = (
+        db.query(
+            period_expr.label("period_start"),
+            revenue_expr.label("revenue"),
+            cost_expr.label("total_cost"),
+        )
+        .filter(
+            Transaction.business_id == business.id,
+            Transaction.date >= resolved_start,
+            Transaction.date <= resolved_end,
+        )
+        .group_by(period_expr)
+        .order_by(period_expr)
+        .all()
+    )
+
+    points = [
+        TimeseriesPoint(
+            period_start=row.period_start,
+            revenue=Decimal(row.revenue),
+            total_cost=Decimal(row.total_cost),
+            gross_profit=Decimal(row.revenue) - Decimal(row.total_cost),
+        )
+        for row in rows
+    ]
+
+    return AnalyticsTimeseries(
+        start_date=resolved_start,
+        end_date=resolved_end,
+        granularity=granularity.value,
+        points=points,
     )
