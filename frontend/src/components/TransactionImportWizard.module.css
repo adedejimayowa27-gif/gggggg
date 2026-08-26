@@ -1,0 +1,235 @@
+.wrap {
+  max-width: 760px;
+}
+
+.dropzone {
+  border: 1px dashed #2a3142;
+  border-radius: 10px;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  background: #0f1420;
+}
+
+.dropzone h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.dropzone p {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+.fileInput {
+  display: none;
+}
+
+.chooseButton {
+  display: inline-block;
+  padding: 0.65rem 1.25rem;
+  border-radius: 8px;
+  border: 1px solid #2a2f3a;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fileName {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.uploadButton {
+  margin-top: 1.25rem;
+  padding: 0.7rem 1.5rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.uploadButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #ff6b6b;
+  font-size: 0.875rem;
+  margin-top: 1rem;
+}
+
+.section {
+  margin-top: 2rem;
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid #1f2430;
+  border-radius: 8px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: #11151d;
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 1px solid #1f2430;
+}
+
+.table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #171b25;
+  color: var(--foreground);
+}
+
+.mappingGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1.5rem;
+}
+
+.mappingRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mappingLabel {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.mappingOptional {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.75rem;
+}
+
+.select {
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #2a2f3a;
+  background: #151922;
+  color: var(--foreground);
+  font-size: 0.9rem;
+}
+
+.confirmButton {
+  margin-top: 1.5rem;
+  padding: 0.7rem 1.5rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirmButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelButton {
+  margin-top: 1.5rem;
+  margin-left: 0.75rem;
+  padding: 0.7rem 1.25rem;
+  border-radius: 8px;
+  border: 1px solid #2a2f3a;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.resultSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.resultStat {
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  border: 1px solid #1f2430;
+  background: #11151d;
+  min-width: 140px;
+}
+
+.resultStatValue {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.resultStatLabel {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.successValue {
+  color: #4ade80;
+}
+
+.failValue {
+  color: #ff6b6b;
+}
+
+.errorList {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #1f2430;
+  border-radius: 8px;
+}
+
+.errorRow {
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid #171b25;
+  font-size: 0.8rem;
+}
+
+.errorRow:last-child {
+  border-bottom: none;
+}
+
+.errorRowNumber {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.errorMessages {
+  color: #ff9b9b;
+  margin-top: 0.15rem;
+}
+
+@media (max-width: 640px) {
+  .mappingGrid {
+    grid-template-columns: 1fr;
+  }
+}
