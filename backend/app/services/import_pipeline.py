@@ -10,13 +10,14 @@ route means a future data source only needs to produce the same
 """
 import io
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import date, datetime
 
 import pandas as pd
 
 from app.core.exceptions import AppError
 
+REQUIRED_FIELDS = ["date", "product", "quantity", "selling_price"]
 STANDARD_FIELDS = ["date", "product", "quantity", "selling_price", "cost_price"]
 
 # Known header variants for each standard field, used for automatic
@@ -161,3 +162,108 @@ def parse_upload(file_bytes: bytes, filename: str) -> tuple[list[str], list[dict
     ]
 
     return headers, rows
+
+
+def _parse_date_value(value) -> date:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise ValueError("Missing date value.")
+    try:
+        parsed = pd.to_datetime(value, errors="raise")
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"Could not parse '{value}' as a date.") from exc
+    if pd.isna(parsed):
+        raise ValueError(f"Could not parse '{value}' as a date.")
+    return parsed.date()
+
+
+def _parse_decimal_value(value, field_label: str, allow_negative: bool = False) -> Decimal:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise ValueError(f"Missing {field_label} value.")
+    if isinstance(value, str):
+        cleaned = re.sub(r"[^0-9.\-]", "", value)
+    else:
+        cleaned = str(value)
+    try:
+        parsed = Decimal(cleaned)
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"'{value}' is not a valid number for {field_label}.") from exc
+    if not allow_negative and parsed < 0:
+        raise ValueError(f"{field_label} cannot be negative (got {value}).")
+    return parsed
+
+
+def validate_and_convert_rows(
+    raw_rows: list[dict], mapping: dict[str, str | None]
+) -> tuple[list[dict], list[dict]]:
+    """
+    Apply a confirmed column mapping to raw rows, validating and
+    converting each one.
+
+    Returns (valid_rows, row_errors):
+    - valid_rows: list of dicts with keys date/product/quantity/
+      selling_price/cost_price, ready to construct Transaction objects.
+    - row_errors: list of {"row_number": int, "errors": [str, ...]},
+      1-indexed against the data rows (not counting the header).
+    """
+    missing_required = [f for f in REQUIRED_FIELDS if not mapping.get(f)]
+    if missing_required:
+        raise AppError(
+            f"Missing column mapping for required field(s): {', '.join(missing_required)}.",
+            code="incomplete_mapping",
+        )
+
+    valid_rows: list[dict] = []
+    row_errors: list[dict] = []
+
+    for index, raw_row in enumerate(raw_rows):
+        row_number = index + 1
+        errors: list[str] = []
+        converted: dict = {}
+
+        try:
+            converted["date"] = _parse_date_value(raw_row.get(mapping["date"]))
+        except ValueError as exc:
+            errors.append(str(exc))
+
+        product_value = raw_row.get(mapping["product"])
+        product_str = str(product_value).strip() if product_value is not None else ""
+        if not product_str:
+            errors.append("Product is required.")
+        else:
+            converted["product"] = product_str
+
+        try:
+            converted["quantity"] = _parse_decimal_value(
+                raw_row.get(mapping["quantity"]), "quantity"
+            )
+            if converted["quantity"] <= 0:
+                errors.append("Quantity must be greater than zero.")
+        except ValueError as exc:
+            errors.append(str(exc))
+
+        try:
+            converted["selling_price"] = _parse_decimal_value(
+                raw_row.get(mapping["selling_price"]), "selling price"
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
+
+        cost_column = mapping.get("cost_price")
+        if cost_column:
+            cost_raw = raw_row.get(cost_column)
+            if cost_raw is not None and str(cost_raw).strip():
+                try:
+                    converted["cost_price"] = _parse_decimal_value(cost_raw, "cost price")
+                except ValueError as exc:
+                    errors.append(str(exc))
+            else:
+                converted["cost_price"] = None
+        else:
+            converted["cost_price"] = None
+
+        if errors:
+            row_errors.append({"row_number": row_number, "errors": errors})
+        else:
+            valid_rows.append(converted)
+
+    return valid_rows, row_errors
