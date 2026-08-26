@@ -37,6 +37,12 @@ class Business(Base):
     )
 
     owner: Mapped["User"] = relationship("User", back_populates="businesses")
+    transactions: Mapped[list["Transaction"]] = relationship(
+        "Transaction", back_populates="business", cascade="all, delete-orphan"
+    )
+    import_sessions: Mapped[list["ImportSession"]] = relationship(
+        "ImportSession", back_populates="business", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Business id={self.id} name={self.name!r}>"
