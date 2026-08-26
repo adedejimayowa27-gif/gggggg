@@ -8,3 +8,9 @@ from app.schemas.import_session import (  # noqa: F401
     RowError,
 )
 from app.schemas.transaction import TransactionOut, PaginatedTransactions  # noqa: F401
+from app.schemas.chat import (  # noqa: F401
+    ChatConversationCreate,
+    ChatConversationOut,
+    ChatMessageCreate,
+    ChatMessageOut,
+)
