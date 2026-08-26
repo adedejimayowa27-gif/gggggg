@@ -33,3 +33,21 @@ class AnalyticsTimeseries(BaseModel):
     end_date: date
     granularity: str
     points: list[TimeseriesPoint]
+
+
+class ProductAnalyticsItem(BaseModel):
+    product: str
+    units_sold: Decimal
+    revenue: Decimal
+    total_cost: Decimal
+    gross_profit: Decimal
+    transaction_count: int
+
+
+class ProductAnalytics(BaseModel):
+    start_date: date
+    end_date: date
+    top_selling: list[ProductAnalyticsItem]
+    highest_profit: list[ProductAnalyticsItem]
+    lowest_profit: list[ProductAnalyticsItem]
+    slow_moving: list[ProductAnalyticsItem]
