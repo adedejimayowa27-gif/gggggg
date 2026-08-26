@@ -1,0 +1,84 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.presetGroup {
+  display: inline-flex;
+  border: 1px solid #1f2430;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #11151d;
+}
+
+.presetButton {
+  padding: 0.45rem 0.85rem;
+  border: none;
+  border-right: 1px solid #1f2430;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.presetButton:last-child {
+  border-right: none;
+}
+
+.presetButton:hover {
+  color: var(--foreground);
+}
+
+.presetButtonActive,
+.presetButtonActive:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.customRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dateInput {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #2a2f3a;
+  background: #151922;
+  color: var(--foreground);
+  font-size: 0.85rem;
+}
+
+.customSep {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 480px) {
+  .wrap {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .presetGroup {
+    width: 100%;
+  }
+
+  .presetButton {
+    flex: 1;
+  }
+
+  .customRow {
+    flex-wrap: wrap;
+  }
+
+  .dateInput {
+    flex: 1;
+    min-width: 0;
+  }
+}
