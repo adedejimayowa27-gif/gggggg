@@ -1,13 +1,37 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
 import { apiFetch, ApiError } from "@/lib/api";
-import type { Business } from "@/types";
+import { fetchAnalyticsSummary } from "@/lib/analytics";
+import type { AnalyticsSummary, Business, DateRangeValue } from "@/types";
 import MetricCard from "@/components/MetricCard";
+import DateRangePicker from "@/components/DateRangePicker";
 import styles from "./overview.module.css";
+
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+});
+
+const numberFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 2,
+});
+
+function formatCurrency(value: string): string {
+  return currencyFormatter.format(Number(value));
+}
+
+function formatPercent(value: string): string {
+  return `${numberFormatter.format(Number(value))}%`;
+}
+
+function formatNumber(value: string | number): string {
+  return numberFormatter.format(Number(value));
+}
 
 export default function OverviewPage() {
   const { token } = useAuth();
@@ -18,6 +42,37 @@ export default function OverviewPage() {
   const [industry, setIndustry] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ range: "30d" });
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token || !primaryBusiness) return;
+
+    let cancelled = false;
+    setIsLoadingSummary(true);
+    setSummaryError(null);
+
+    fetchAnalyticsSummary(primaryBusiness.id, dateRange, token)
+      .then((data) => {
+        if (!cancelled) setSummary(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setSummary(null);
+          setSummaryError(err instanceof ApiError ? err.message : "Could not load analytics.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingSummary(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, primaryBusiness, dateRange]);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -78,6 +133,16 @@ export default function OverviewPage() {
     );
   }
 
+  // A business exists but the summary either hasn't loaded yet or came
+  // back with nothing in range -- both render the cards' built-in empty
+  // state rather than a stale/blank number.
+  const hasData = !!summary && summary.transaction_count > 0;
+  const emptyText = isLoadingSummary
+    ? "Loading…"
+    : summaryError
+      ? "Couldn't load"
+      : "No transactions yet";
+
   return (
     <div>
       <div className={styles.header}>
@@ -87,9 +152,12 @@ export default function OverviewPage() {
             <span className={styles.industryChip}>{primaryBusiness.industry}</span>
           )}
         </div>
-        <button className={styles.newBusinessButton} onClick={() => setShowCreateForm((s) => !s)}>
-          {showCreateForm ? "Cancel" : "+ New business"}
-        </button>
+        <div className={styles.headerControls}>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <button className={styles.newBusinessButton} onClick={() => setShowCreateForm((s) => !s)}>
+            {showCreateForm ? "Cancel" : "+ New business"}
+          </button>
+        </div>
       </div>
 
       {showCreateForm && (
@@ -132,12 +200,44 @@ export default function OverviewPage() {
       </div>
 
       <div className={styles.cardsGrid}>
-        <MetricCard label="Revenue" icon="revenue" emptyText="No transactions yet" />
-        <MetricCard label="Gross Profit" icon="profit" emptyText="No transactions yet" />
-        <MetricCard label="Profit Margin" icon="margin" emptyText="No transactions yet" />
-        <MetricCard label="Transactions" icon="transactions" emptyText="0 recorded" />
-        <MetricCard label="Products" icon="products" emptyText="0 added" />
+        <MetricCard
+          label="Revenue"
+          icon="revenue"
+          isEmpty={!hasData}
+          emptyText={emptyText}
+          value={summary ? formatCurrency(summary.revenue) : undefined}
+        />
+        <MetricCard
+          label="Gross Profit"
+          icon="profit"
+          isEmpty={!hasData}
+          emptyText={emptyText}
+          value={summary ? formatCurrency(summary.gross_profit) : undefined}
+        />
+        <MetricCard
+          label="Profit Margin"
+          icon="margin"
+          isEmpty={!hasData}
+          emptyText={emptyText}
+          value={summary ? formatPercent(summary.profit_margin) : undefined}
+        />
+        <MetricCard
+          label="Transactions"
+          icon="transactions"
+          isEmpty={!hasData}
+          emptyText={isLoadingSummary ? "Loading…" : summaryError ? "Couldn't load" : "0 recorded"}
+          value={summary ? formatNumber(summary.transaction_count) : undefined}
+        />
+        <MetricCard
+          label="Units Sold"
+          icon="products"
+          isEmpty={!hasData}
+          emptyText={isLoadingSummary ? "Loading…" : summaryError ? "Couldn't load" : "0 sold"}
+          value={summary ? formatNumber(summary.units_sold) : undefined}
+        />
       </div>
+
+      {summaryError && <p className={styles.error}>{summaryError}</p>}
 
       {businesses.length > 1 && (
         <p style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: "1.5rem" }}>
