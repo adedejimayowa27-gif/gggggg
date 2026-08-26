@@ -31,8 +31,11 @@ class Settings(BaseSettings):
     # Empty by default so local/dev/test setups without an API key still
     # boot; app.services.ai_assistant raises a clear 503 if a request
     # actually reaches the assistant route with this unset.
-    ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-sonnet-5"
+    GROQ_API_KEY: str = ""
+    # Pick a Groq-hosted model that supports tool calling -- check
+    # https://console.groq.com/docs/models for the current list, since
+    # Groq's lineup changes more often than a typical API.
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
 
     model_config = SettingsConfigDict(
         env_file=".env",
