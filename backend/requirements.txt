@@ -13,6 +13,8 @@ email-validator==2.2.0
 pandas==2.2.3
 openpyxl==3.1.5
 # Range rather than an exact pin: verify/lock the current release for your
-# environment (`pip install anthropic` then freeze) rather than trusting
-# this one, since it wasn't resolved against a live package index here.
-anthropic>=0.40.0,<1.0.0
+# environment (`pip install openai` then freeze) rather than trusting this
+# one, since it wasn't resolved against a live package index here. Groq's
+# API is OpenAI-compatible, so this is the same SDK, just pointed at
+# Groq's base_url in app/services/ai_assistant.py.
+openai>=1.40.0,<2.0.0
