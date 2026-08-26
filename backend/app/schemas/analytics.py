@@ -19,3 +19,17 @@ class AnalyticsSummary(BaseModel):
     units_sold: Decimal
     transaction_count: int
     average_transaction_value: Decimal
+
+
+class TimeseriesPoint(BaseModel):
+    period_start: date
+    revenue: Decimal
+    total_cost: Decimal
+    gross_profit: Decimal
+
+
+class AnalyticsTimeseries(BaseModel):
+    start_date: date
+    end_date: date
+    granularity: str
+    points: list[TimeseriesPoint]
