@@ -10,3 +10,5 @@ Add new model imports here as they're created.
 from app.db.base_class import Base  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.business import Business  # noqa: F401
+from app.models.import_session import ImportSession  # noqa: F401
+from app.models.transaction import Transaction  # noqa: F401
