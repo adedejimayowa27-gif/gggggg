@@ -1,55 +1,71 @@
 """
-Import routes.
+Shared FastAPI dependencies.
 
-Nested under a specific business (/businesses/{business_id}/imports/...)
-so every route here automatically inherits the ownership check from
-get_owned_business -- there is no way to reach another business's data
-through this router.
+`get_current_user` is the single choke point for route protection: any
+route that takes it as a dependency requires a valid bearer token and an
+active user. Later steps (business routes, AI assistant, etc.) reuse this
+same dependency rather than re-implementing auth checks.
 """
-from fastapi import APIRouter, Depends, File, UploadFile, status
+import uuid
+
+from fastapi import Depends
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_owned_business
+from app.core.exceptions import NotFoundError, UnauthorizedError
+from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.business import Business
-from app.models.import_session import ImportSession
-from app.schemas.import_session import ImportPreviewOut
-from app.services.import_pipeline import parse_upload, suggest_mapping
+from app.models.user import User
 
-router = APIRouter(prefix="/businesses/{business_id}/imports", tags=["imports"])
-
-PREVIEW_ROW_LIMIT = 10
+# tokenUrl is only used by the OpenAPI docs UI to know where to fetch a token from.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
-@router.post("/upload", response_model=ImportPreviewOut, status_code=status.HTTP_201_CREATED)
-async def upload_import_file(
-    file: UploadFile = File(...),
+def get_current_user(
+    token: str | None = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
-):
-    file_bytes = await file.read()
-    headers, rows = parse_upload(file_bytes, file.filename or "upload")
-    mapping = suggest_mapping(headers)
+) -> User:
+    if not token:
+        raise UnauthorizedError("Not authenticated.")
 
-    import_session = ImportSession(
-        business_id=business.id,
-        filename=file.filename or "upload",
-        status="pending_mapping",
-        detected_columns=headers,
-        raw_rows=rows,
-        suggested_mapping=mapping,
-        total_row_count=len(rows),
-    )
-    db.add(import_session)
-    db.commit()
-    db.refresh(import_session)
+    subject = decode_access_token(token)
+    if not subject:
+        raise UnauthorizedError("Invalid or expired token.")
 
-    return ImportPreviewOut(
-        id=import_session.id,
-        filename=import_session.filename,
-        status=import_session.status,
-        detected_columns=headers,
-        suggested_mapping=mapping,
-        preview_rows=rows[:PREVIEW_ROW_LIMIT],
-        total_row_count=import_session.total_row_count,
+    try:
+        user_id = uuid.UUID(subject)
+    except ValueError:
+        raise UnauthorizedError("Invalid token subject.")
+
+    user = db.get(User, user_id)
+    if not user:
+        raise UnauthorizedError("User not found.")
+    if not user.is_active:
+        raise UnauthorizedError("User account is inactive.")
+
+    return user
+
+
+def get_owned_business(
+    business_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Business:
+    """
+    Fetch a business by ID, scoped to the current user.
+
+    This is the single choke point for the "a user must never see another
+    business's data" requirement -- every route nested under
+    /businesses/{business_id}/... should depend on this rather than
+    querying Business directly, so the ownership check can never be
+    accidentally skipped.
+    """
+    business = (
+        db.query(Business)
+        .filter(Business.id == business_id, Business.owner_id == current_user.id)
+        .first()
     )
+    if not business:
+        raise NotFoundError("Business not found.")
+    return business
