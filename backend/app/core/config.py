@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:3000"
 
+    # --- AI assistant (Batch 5.3) ---
+    # Empty by default so local/dev/test setups without an API key still
+    # boot; app.services.ai_assistant raises a clear 503 if a request
+    # actually reaches the assistant route with this unset.
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-sonnet-5"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
