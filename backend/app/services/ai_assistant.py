@@ -2,16 +2,18 @@
 AI assistant service: the tool-calling loop that turns a user's
 natural-language question into a grounded, tool-backed reply.
 
-The model (Claude, via the Anthropic Messages API) is never allowed to
-answer with a number it invented itself -- the system prompt instructs it
-to call one of the tools below for every metric, and every tool call is
-executed server-side against `app.services.ai_tools`, scoped to the single
-`Business` instance passed into `run_assistant` (never a business_id the
-model could supply itself), before the result is handed back to the
-model. There is no code path here that accepts a business_id from the
-model or the tool-call arguments -- the tool wrappers below close over
-`business` instead of taking it as an argument, so a call can never leak
-another business's data even if the model hallucinated a different id.
+Runs on Groq (an OpenAI-compatible chat-completions API hosting open
+models like Llama) via the `openai` SDK pointed at Groq's base URL. The
+model is never allowed to answer with a number it invented itself -- the
+system prompt instructs it to call one of the tools below for every
+metric, and every tool call is executed server-side against
+`app.services.ai_tools`, scoped to the single `Business` instance passed
+into `run_assistant` (never a business_id the model could supply itself),
+before the result is handed back to the model. There is no code path here
+that accepts a business_id from the model or the tool-call arguments --
+the tool wrappers below close over `business` instead of taking it as an
+argument, so a call can never leak another business's data even if the
+model hallucinated a different id.
 
 The loop terminates when the model replies with plain text (no more tool
 calls) or after MAX_TOOL_ITERATIONS round trips, whichever comes first,
@@ -22,8 +24,7 @@ import logging
 from datetime import date
 from typing import Any, Callable
 
-import anthropic
-
+from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -35,24 +36,26 @@ logger = logging.getLogger("app")
 
 MAX_TOOL_ITERATIONS = 6
 
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+
 # Keep in sync with app.services.ai_tools._VALID_PRODUCT_METRICS -- duplicated
 # here (rather than importing the private name) so the tool JSON schema below
 # is self-contained and easy to read next to the tools it describes.
 _METRICS = ["units_sold", "revenue", "total_cost", "gross_profit", "transaction_count"]
 
-_client: anthropic.Anthropic | None = None
+_client: OpenAI | None = None
 
 
-def _get_client() -> anthropic.Anthropic:
+def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        if not settings.ANTHROPIC_API_KEY:
+        if not settings.GROQ_API_KEY:
             raise AppError(
-                "AI assistant is not configured (missing ANTHROPIC_API_KEY).",
+                "AI assistant is not configured (missing GROQ_API_KEY).",
                 code="assistant_not_configured",
                 status_code=503,
             )
-        _client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        _client = OpenAI(api_key=settings.GROQ_API_KEY, base_url=GROQ_BASE_URL)
     return _client
 
 
@@ -82,125 +85,160 @@ unrelated to the numbers), answer briefly and helpfully without calling a tool.
 """
 
 
+# OpenAI-compatible "function" tool shape (Groq uses the same format as
+# OpenAI's chat-completions tool calling).
 TOOLS = [
     {
-        "name": "resolve_date_range",
-        "description": (
-            "Resolve a natural-language date phrase (e.g. 'last month', 'this week', "
-            "'last 30 days', 'yesterday') into a concrete start_date/end_date pair. "
-            "Call this before any other tool whenever the user's question doesn't already "
-            "give you an explicit YYYY-MM-DD range."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "phrase": {
-                    "type": "string",
-                    "description": "The date phrase to resolve, e.g. 'last month' or 'past 7 days'.",
-                }
+        "type": "function",
+        "function": {
+            "name": "resolve_date_range",
+            "description": (
+                "Resolve a natural-language date phrase (e.g. 'last month', 'this week', "
+                "'last 30 days', 'yesterday') into a concrete start_date/end_date pair. "
+                "Call this before any other tool whenever the user's question doesn't already "
+                "give you an explicit YYYY-MM-DD range."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phrase": {
+                        "type": "string",
+                        "description": "The date phrase to resolve, e.g. 'last month' or 'past 7 days'.",
+                    }
+                },
+                "required": ["phrase"],
             },
-            "required": ["phrase"],
         },
     },
     {
-        "name": "get_revenue",
-        "description": "Total revenue for this business over an inclusive date range.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+        "type": "function",
+        "function": {
+            "name": "get_revenue",
+            "description": "Total revenue for this business over an inclusive date range.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                },
+                "required": ["start_date", "end_date"],
             },
-            "required": ["start_date", "end_date"],
         },
     },
     {
-        "name": "get_profit",
-        "description": (
-            "Revenue, total cost, gross profit, and profit margin for this business over an "
-            "inclusive date range."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+        "type": "function",
+        "function": {
+            "name": "get_profit",
+            "description": (
+                "Revenue, total cost, gross profit, and profit margin for this business over "
+                "an inclusive date range."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                },
+                "required": ["start_date", "end_date"],
             },
-            "required": ["start_date", "end_date"],
         },
     },
     {
-        "name": "get_expenses",
-        "description": "Total cost of goods sold for this business over an inclusive date range.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+        "type": "function",
+        "function": {
+            "name": "get_expenses",
+            "description": "Total cost of goods sold for this business over an inclusive date range.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                },
+                "required": ["start_date", "end_date"],
             },
-            "required": ["start_date", "end_date"],
         },
     },
     {
-        "name": "get_product_sales",
-        "description": (
-            "Units sold, revenue, cost, and profit for one named product over an inclusive "
-            "date range. The product name is matched case-insensitively but must otherwise "
-            "match exactly."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "product": {"type": "string", "description": "Exact product name."},
+        "type": "function",
+        "function": {
+            "name": "get_product_sales",
+            "description": (
+                "Units sold, revenue, cost, and profit for one named product over an inclusive "
+                "date range. The product name is matched case-insensitively but must otherwise "
+                "match exactly."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "product": {"type": "string", "description": "Exact product name."},
+                },
+                "required": ["start_date", "end_date", "product"],
             },
-            "required": ["start_date", "end_date", "product"],
         },
     },
     {
-        "name": "get_top_products",
-        "description": "The best-performing products over an inclusive date range, ranked by a metric.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "limit": {"type": "integer", "description": "How many products to return (1-50). Defaults to 5."},
-                "metric": {"type": "string", "enum": _METRICS, "description": "Defaults to 'revenue'."},
+        "type": "function",
+        "function": {
+            "name": "get_top_products",
+            "description": "The best-performing products over an inclusive date range, ranked by a metric.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "limit": {
+                        "type": "integer",
+                        "description": "How many products to return (1-50). Defaults to 5.",
+                    },
+                    "metric": {"type": "string", "enum": _METRICS, "description": "Defaults to 'revenue'."},
+                },
+                "required": ["start_date", "end_date"],
             },
-            "required": ["start_date", "end_date"],
         },
     },
     {
-        "name": "get_slow_products",
-        "description": "The worst-performing / slowest-moving products over an inclusive date range, ranked by a metric.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "limit": {"type": "integer", "description": "How many products to return (1-50). Defaults to 5."},
-                "metric": {"type": "string", "enum": _METRICS, "description": "Defaults to 'units_sold'."},
+        "type": "function",
+        "function": {
+            "name": "get_slow_products",
+            "description": (
+                "The worst-performing / slowest-moving products over an inclusive date range, "
+                "ranked by a metric."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "limit": {
+                        "type": "integer",
+                        "description": "How many products to return (1-50). Defaults to 5.",
+                    },
+                    "metric": {"type": "string", "enum": _METRICS, "description": "Defaults to 'units_sold'."},
+                },
+                "required": ["start_date", "end_date"],
             },
-            "required": ["start_date", "end_date"],
         },
     },
     {
-        "name": "compare_periods",
-        "description": (
-            "Compare revenue/cost/profit between two date ranges, e.g. this month vs last "
-            "month. period_a is the baseline; period_b is compared against it."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "period_a_start": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "period_a_end": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "period_b_start": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                "period_b_end": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+        "type": "function",
+        "function": {
+            "name": "compare_periods",
+            "description": (
+                "Compare revenue/cost/profit between two date ranges, e.g. this month vs last "
+                "month. period_a is the baseline; period_b is compared against it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "period_a_start": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "period_a_end": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "period_b_start": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "period_b_end": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                },
+                "required": ["period_a_start", "period_a_end", "period_b_start", "period_b_end"],
             },
-            "required": ["period_a_start", "period_a_end", "period_b_start", "period_b_end"],
         },
     },
 ]
@@ -309,23 +347,32 @@ TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
 }
 
 
-def _execute_tool(db: Session, business: Business, name: str, tool_input: dict) -> tuple[dict, bool]:
-    """Run one tool call. Returns (result_dict, is_error) -- never raises, so
-    the loop can always feed a result back to the model rather than crashing
-    the whole request over one bad tool call."""
+def _execute_tool(db: Session, business: Business, name: str, arguments_json: str) -> dict:
+    """Run one tool call and return a JSON-safe result dict -- always
+    including either the tool's real output or an "error" key, never
+    raising, so the loop can always feed something back to the model
+    rather than crashing the whole request over one bad tool call."""
     handler = TOOL_HANDLERS.get(name)
     if handler is None:
-        return {"error": f"Unknown tool: {name!r}."}, True
+        return {"error": f"Unknown tool: {name!r}."}
+
     try:
-        return handler(db, business, **(tool_input or {})), False
+        tool_input = json.loads(arguments_json) if arguments_json else {}
+        if not isinstance(tool_input, dict):
+            raise ValueError("arguments must be a JSON object")
+    except (json.JSONDecodeError, ValueError) as exc:
+        return {"error": f"Could not parse arguments for {name}: {exc}"}
+
+    try:
+        return handler(db, business, **tool_input)
     except ValidationError as exc:
-        return {"error": exc.message}, True
+        return {"error": exc.message}
     except TypeError as exc:
         # Malformed/missing arguments from the model land here.
-        return {"error": f"Invalid arguments for {name}: {exc}"}, True
+        return {"error": f"Invalid arguments for {name}: {exc}"}
     except Exception:
         logger.exception("Tool %r failed for business %s", name, business.id)
-        return {"error": "Internal error while running this tool."}, True
+        return {"error": "Internal error while running this tool."}
 
 
 # ---------------------------------------------------------------------------
@@ -350,42 +397,51 @@ def run_assistant(db: Session, business: Business, history: list[dict]) -> str:
         business_name=business.name, today=date.today().isoformat()
     )
 
-    messages: list[dict] = [{"role": h["role"], "content": h["content"]} for h in history]
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    messages.extend({"role": h["role"], "content": h["content"]} for h in history)
 
     for _ in range(MAX_TOOL_ITERATIONS):
-        response = client.messages.create(
-            model=settings.ANTHROPIC_MODEL,
+        response = client.chat.completions.create(
+            model=settings.GROQ_MODEL,
             max_tokens=1024,
-            system=system_prompt,
-            tools=TOOLS,
             messages=messages,
+            tools=TOOLS,
         )
 
-        tool_use_blocks = [block for block in response.content if block.type == "tool_use"]
+        message = response.choices[0].message
+        tool_calls = message.tool_calls or []
 
-        if not tool_use_blocks:
-            text = "\n".join(
-                block.text for block in response.content if block.type == "text" and block.text
-            ).strip()
+        if not tool_calls:
+            text = (message.content or "").strip()
             return text or "I wasn't able to generate a response to that."
 
-        # Echo the assistant's tool-use turn back, then answer every tool_use
-        # block with a matching tool_result before the next round trip --
-        # the API requires one tool_result per tool_use in the same turn.
-        messages.append({"role": "assistant", "content": response.content})
+        # Echo the assistant's tool-call turn back, then answer every
+        # tool_call with a matching "tool" message before the next round
+        # trip -- the API requires one tool result per tool_call.
+        messages.append(
+            {
+                "role": "assistant",
+                "content": message.content,
+                "tool_calls": [
+                    {
+                        "id": call.id,
+                        "type": "function",
+                        "function": {"name": call.function.name, "arguments": call.function.arguments},
+                    }
+                    for call in tool_calls
+                ],
+            }
+        )
 
-        tool_results = []
-        for block in tool_use_blocks:
-            result, is_error = _execute_tool(db, business, block.name, block.input)
-            tool_results.append(
+        for call in tool_calls:
+            result = _execute_tool(db, business, call.function.name, call.function.arguments)
+            messages.append(
                 {
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
+                    "role": "tool",
+                    "tool_call_id": call.id,
                     "content": json.dumps(result),
-                    "is_error": is_error,
                 }
             )
-        messages.append({"role": "user", "content": tool_results})
 
     logger.warning("Assistant tool loop hit MAX_TOOL_ITERATIONS for business %s", business.id)
     return (
