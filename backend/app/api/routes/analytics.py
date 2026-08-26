@@ -18,7 +18,13 @@ from app.api.deps import get_owned_business
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.transaction import Transaction
-from app.schemas.analytics import AnalyticsSummary, AnalyticsTimeseries, TimeseriesPoint
+from app.schemas.analytics import (
+    AnalyticsSummary,
+    AnalyticsTimeseries,
+    ProductAnalytics,
+    ProductAnalyticsItem,
+    TimeseriesPoint,
+)
 from app.services.analytics import DateRangePreset, Granularity, resolve_date_range
 
 router = APIRouter(prefix="/businesses/{business_id}/analytics", tags=["analytics"])
@@ -137,4 +143,73 @@ def get_analytics_timeseries(
         end_date=resolved_end,
         granularity=granularity.value,
         points=points,
+    )
+
+
+@router.get("/products", response_model=ProductAnalytics)
+def get_analytics_products(
+    range: DateRangePreset = Query(default=DateRangePreset.LAST_30D),
+    start_date: date_type | None = Query(default=None),
+    end_date: date_type | None = Query(default=None),
+    limit: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
+
+    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
+    revenue_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.selling_price), 0
+    )
+    cost_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.cost_price), 0
+    )
+    count_expr = func.count(Transaction.id)
+
+    # Single grouped aggregation by product -- every per-product number
+    # (units, revenue, cost, profit, count) comes from this one query.
+    rows = (
+        db.query(
+            Transaction.product.label("product"),
+            units_expr.label("units_sold"),
+            revenue_expr.label("revenue"),
+            cost_expr.label("total_cost"),
+            count_expr.label("transaction_count"),
+        )
+        .filter(
+            Transaction.business_id == business.id,
+            Transaction.date >= resolved_start,
+            Transaction.date <= resolved_end,
+        )
+        .group_by(Transaction.product)
+        .all()
+    )
+
+    items = [
+        ProductAnalyticsItem(
+            product=row.product,
+            units_sold=Decimal(row.units_sold),
+            revenue=Decimal(row.revenue),
+            total_cost=Decimal(row.total_cost),
+            gross_profit=Decimal(row.revenue) - Decimal(row.total_cost),
+            transaction_count=row.transaction_count,
+        )
+        for row in rows
+    ]
+
+    # The aggregation already happened in SQL above; these are just four
+    # small in-memory sorts/slices over the already-grouped result set,
+    # not a re-derivation of the figures themselves.
+    top_selling = sorted(items, key=lambda i: i.units_sold, reverse=True)[:limit]
+    highest_profit = sorted(items, key=lambda i: i.gross_profit, reverse=True)[:limit]
+    lowest_profit = sorted(items, key=lambda i: i.gross_profit)[:limit]
+    slow_moving = sorted(items, key=lambda i: i.units_sold)[:limit]
+
+    return ProductAnalytics(
+        start_date=resolved_start,
+        end_date=resolved_end,
+        top_selling=top_selling,
+        highest_profit=highest_profit,
+        lowest_profit=lowest_profit,
+        slow_moving=slow_moving,
     )
