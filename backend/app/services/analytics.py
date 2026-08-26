@@ -20,6 +20,12 @@ class DateRangePreset(str, Enum):
     CUSTOM = "custom"
 
 
+class Granularity(str, Enum):
+    DAY = "day"
+    WEEK = "week"
+    MONTH = "month"
+
+
 def resolve_date_range(
     range_preset: DateRangePreset,
     start_date: date | None = None,
