@@ -6,19 +6,41 @@ so every route here automatically inherits the ownership check from
 get_owned_business -- there is no way to reach another business's data
 through this router.
 """
+import uuid
+
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_owned_business
+from app.core.exceptions import AppError, NotFoundError
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.import_session import ImportSession
-from app.schemas.import_session import ImportPreviewOut
-from app.services.import_pipeline import parse_upload, suggest_mapping
+from app.models.transaction import Transaction
+from app.schemas.import_session import (
+    ImportConfirmIn,
+    ImportConfirmOut,
+    ImportPreviewOut,
+    ImportSessionOut,
+)
+from app.services.import_pipeline import parse_upload, suggest_mapping, validate_and_convert_rows
 
 router = APIRouter(prefix="/businesses/{business_id}/imports", tags=["imports"])
 
 PREVIEW_ROW_LIMIT = 10
+
+
+def _get_owned_import_session(
+    import_id: uuid.UUID, business: Business, db: Session
+) -> ImportSession:
+    import_session = (
+        db.query(ImportSession)
+        .filter(ImportSession.id == import_id, ImportSession.business_id == business.id)
+        .first()
+    )
+    if not import_session:
+        raise NotFoundError("Import not found.")
+    return import_session
 
 
 @router.post("/upload", response_model=ImportPreviewOut, status_code=status.HTTP_201_CREATED)
@@ -53,3 +75,68 @@ async def upload_import_file(
         preview_rows=rows[:PREVIEW_ROW_LIMIT],
         total_row_count=import_session.total_row_count,
     )
+
+
+@router.post("/{import_id}/confirm", response_model=ImportConfirmOut)
+def confirm_import(
+    import_id: uuid.UUID,
+    payload: ImportConfirmIn,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    import_session = _get_owned_import_session(import_id, business, db)
+
+    if import_session.status != "pending_mapping":
+        raise AppError(
+            f"This import has already been {import_session.status} and cannot be confirmed again.",
+            code="already_processed",
+        )
+
+    valid_rows, row_errors = validate_and_convert_rows(
+        import_session.raw_rows, payload.mapping
+    )
+
+    for row in valid_rows:
+        db.add(
+            Transaction(
+                business_id=business.id,
+                import_session_id=import_session.id,
+                date=row["date"],
+                product=row["product"],
+                quantity=row["quantity"],
+                selling_price=row["selling_price"],
+                cost_price=row.get("cost_price"),
+            )
+        )
+
+    import_session.confirmed_mapping = payload.mapping
+    import_session.imported_row_count = len(valid_rows)
+    import_session.failed_row_count = len(row_errors)
+    import_session.row_errors = row_errors
+    import_session.status = "completed" if valid_rows else "failed"
+
+    db.commit()
+    db.refresh(import_session)
+
+    return ImportConfirmOut(
+        id=import_session.id,
+        status=import_session.status,
+        total_row_count=import_session.total_row_count,
+        imported_row_count=import_session.imported_row_count,
+        failed_row_count=import_session.failed_row_count,
+        row_errors=row_errors,
+    )
+
+
+@router.get("", response_model=list[ImportSessionOut])
+def list_import_sessions(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    sessions = (
+        db.query(ImportSession)
+        .filter(ImportSession.business_id == business.id)
+        .order_by(ImportSession.created_at.desc())
+        .all()
+    )
+    return [ImportSessionOut.model_validate(s) for s in sessions]
