@@ -12,9 +12,10 @@ from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import UnauthorizedError
+from app.core.exceptions import NotFoundError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.session import get_db
+from app.models.business import Business
 from app.models.user import User
 
 # tokenUrl is only used by the OpenAPI docs UI to know where to fetch a token from.
@@ -44,3 +45,27 @@ def get_current_user(
         raise UnauthorizedError("User account is inactive.")
 
     return user
+
+
+def get_owned_business(
+    business_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Business:
+    """
+    Fetch a business by ID, scoped to the current user.
+
+    This is the single choke point for the "a user must never see another
+    business's data" requirement -- every route nested under
+    /businesses/{business_id}/... should depend on this rather than
+    querying Business directly, so the ownership check can never be
+    accidentally skipped.
+    """
+    business = (
+        db.query(Business)
+        .filter(Business.id == business_id, Business.owner_id == current_user.id)
+        .first()
+    )
+    if not business:
+        raise NotFoundError("Business not found.")
+    return business
