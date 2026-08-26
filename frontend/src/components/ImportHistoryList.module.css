@@ -1,0 +1,87 @@
+.wrap {
+  margin-top: 1rem;
+}
+
+.list {
+  border: 1px solid #1f2430;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #171b25;
+  flex-wrap: wrap;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rowLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.filename {
+  font-weight: 600;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+.date {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.rowRight {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.counts {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  text-transform: capitalize;
+}
+
+.badgeCompleted {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.badgeFailed {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+}
+
+.badgePending {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+}
+
+.empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+  border: 1px solid #1f2430;
+  border-radius: 8px;
+}
