@@ -22,6 +22,26 @@ class ImportPreviewOut(BaseModel):
     total_row_count: int
 
 
+class RowError(BaseModel):
+    row_number: int
+    errors: list[str]
+
+
+class ImportConfirmIn(BaseModel):
+    mapping: dict[str, str | None]
+
+
+class ImportConfirmOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    status: str
+    total_row_count: int
+    imported_row_count: int
+    failed_row_count: int
+    row_errors: list[RowError]
+
+
 class ImportSessionOut(BaseModel):
     """Used for the import-history list."""
 
