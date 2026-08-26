@@ -51,6 +51,11 @@ class ForbiddenError(AppError):
     code = "forbidden"
 
 
+class ValidationError(AppError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "validation_error"
+
+
 def _error_body(code: str, message: str) -> dict:
     return {"error": {"code": code, "message": message}}
 
