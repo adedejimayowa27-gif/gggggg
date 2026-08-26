@@ -14,3 +14,4 @@ from app.schemas.chat import (  # noqa: F401
     ChatMessageCreate,
     ChatMessageOut,
 )
+from app.schemas.assistant import AssistantMessageIn, AssistantMessageOut  # noqa: F401
