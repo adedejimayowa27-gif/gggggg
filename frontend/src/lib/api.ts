@@ -22,12 +22,14 @@ interface RequestOptions extends RequestInit {
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { authToken, headers, ...rest } = options;
+  const { authToken, headers, body, ...rest } = options;
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
 
   const response = await fetch(`${API_URL}${path}`, {
     ...rest,
+    body,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...headers,
     },
