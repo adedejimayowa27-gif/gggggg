@@ -12,3 +12,7 @@ python-multipart==0.0.9
 email-validator==2.2.0
 pandas==2.2.3
 openpyxl==3.1.5
+# Range rather than an exact pin: verify/lock the current release for your
+# environment (`pip install anthropic` then freeze) rather than trusting
+# this one, since it wasn't resolved against a live package index here.
+anthropic>=0.40.0,<1.0.0
