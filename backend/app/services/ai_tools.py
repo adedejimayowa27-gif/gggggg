@@ -29,7 +29,12 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import ValidationError
 from app.models.business import Business
 from app.models.transaction import Transaction
-from app.services.analytics import DateRangePreset, resolve_date_range
+from app.services.analytics import (
+    BREAKDOWN_UNSET_LABELS,
+    BreakdownField,
+    DateRangePreset,
+    resolve_date_range,
+)
 
 _VALID_PRODUCT_METRICS = {
     "units_sold",
@@ -37,6 +42,15 @@ _VALID_PRODUCT_METRICS = {
     "total_cost",
     "gross_profit",
     "transaction_count",
+}
+
+# Reuses the same field->column mapping as the /analytics/breakdown route
+# (app.api.routes.analytics) -- one canonical place for "which column does
+# each optional breakdown dimension map to".
+_GROUP_BY_COLUMNS = {
+    BreakdownField.CATEGORY: Transaction.category,
+    BreakdownField.CUSTOMER: Transaction.customer,
+    BreakdownField.PAYMENT_METHOD: Transaction.payment_method,
 }
 
 
@@ -370,6 +384,97 @@ def compare_periods(
             period_a["gross_profit"], period_b["gross_profit"]
         ),
     }
+
+
+def get_breakdown(
+    db: Session,
+    business: Business,
+    start_date: date,
+    end_date: date,
+    group_by: str,
+    limit: int = 10,
+) -> dict:
+    """
+    Revenue/cost/profit grouped by category, customer, or payment method
+    for [start_date, end_date] -- the three optional fields a business
+    may or may not populate on its transactions (Batch 6.1).
+
+    Returns `has_data: false` (with a `note`) when the business has never
+    recorded the requested field on any transaction in range, so the
+    model can say "this business doesn't track payment method data"
+    instead of presenting the one combined total as if it were a real
+    breakdown -- the same insufficient-data guarantee as `get_revenue`
+    and friends, just for an entire dimension rather than a whole period.
+    """
+    _validate_range(start_date, end_date)
+    _validate_limit(limit)
+
+    try:
+        field = BreakdownField(group_by)
+    except ValueError as exc:
+        raise ValidationError(
+            f"Unsupported group_by: {group_by!r}. Must be one of "
+            f"{[f.value for f in BreakdownField]}."
+        ) from exc
+
+    group_column = _GROUP_BY_COLUMNS[field]
+
+    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
+    revenue_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.selling_price), 0
+    )
+    cost_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.cost_price), 0
+    )
+    count_expr = func.count(Transaction.id)
+
+    rows = (
+        db.query(
+            group_column.label("group_value"),
+            units_expr.label("units_sold"),
+            revenue_expr.label("revenue"),
+            cost_expr.label("total_cost"),
+            count_expr.label("transaction_count"),
+        )
+        .filter(*_period_filters(business, start_date, end_date))
+        .group_by(group_column)
+        .order_by(revenue_expr.desc())
+        .limit(limit)
+        .all()
+    )
+
+    has_data = any(row.group_value is not None for row in rows)
+    unset_label = BREAKDOWN_UNSET_LABELS[field]
+
+    items = []
+    for row in rows:
+        revenue = Decimal(row.revenue)
+        total_cost = Decimal(row.total_cost)
+        items.append(
+            {
+                "group": row.group_value if row.group_value else unset_label,
+                "units_sold": _to_float(row.units_sold, ndigits=3),
+                "revenue": _to_float(revenue),
+                "total_cost": _to_float(total_cost),
+                "gross_profit": _to_float(revenue - total_cost),
+                "transaction_count": row.transaction_count,
+            }
+        )
+
+    result = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "group_by": field.value,
+        "items": items,
+        "has_data": has_data,
+    }
+    if not has_data:
+        result["note"] = (
+            f"This business has no recorded {field.value.replace('_', ' ')} data -- "
+            "every transaction in this range is untagged, so this is one combined "
+            "total rather than a real breakdown."
+        )
+    return result
 
 
 # ---------------------------------------------------------------------------
