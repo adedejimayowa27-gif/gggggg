@@ -8,11 +8,13 @@ columns onto our five standard fields. Keeping this separate from the
 route means a future data source only needs to produce the same
 (headers, rows) shape to reuse everything below.
 """
+import csv
 import io
 import re
 from decimal import Decimal, InvalidOperation
 from datetime import date, datetime
 
+import openpyxl
 import pandas as pd
 
 from app.core.exceptions import AppError
@@ -52,11 +54,125 @@ MAX_ROWS = 5000
 
 ALLOWED_EXTENSIONS = {".csv", ".xlsx"}
 
+# How many leading rows to inspect when looking for the real header row.
+# Real-world exports put titles, a company name, a "Report generated on
+# <date>" line, or blank spacer rows above the actual table, but that
+# clutter is essentially always within the first handful of rows -- this
+# is a generous buffer, not a tight guess.
+HEADER_SCAN_ROWS = 20
+
 
 def normalize_header(header: str) -> str:
     """Lowercase, strip, and collapse punctuation/whitespace for matching."""
     cleaned = re.sub(r"[^a-z0-9]+", " ", str(header).lower()).strip()
     return re.sub(r"\s+", " ", cleaned)
+
+
+def _score_header_row(cells: list) -> tuple[int, int]:
+    """Score how header-like one raw row is.
+
+    Returns (synonym_matches, non_null_count). synonym_matches -- how many
+    cells look like a known field name/synonym -- is the primary signal:
+    a real header row has most/all of its cells recognizable as field
+    names, whereas a title row ("Acme Ventures Sales Report") or a
+    company-name row has at most one filled cell and no field-name
+    matches at all. non_null_count is only a tie-breaker, since a data
+    row can be just as densely filled as a header row.
+    """
+    known_terms = {syn for synonyms in FIELD_SYNONYMS.values() for syn in synonyms} | set(
+        FIELD_SYNONYMS.keys()
+    )
+
+    non_null_count = 0
+    synonym_matches = 0
+    for cell in cells:
+        if cell is None:
+            continue
+        text = str(cell).strip()
+        if not text or text.lower() == "nan":
+            continue
+        non_null_count += 1
+        normalized = normalize_header(text)
+        if not normalized:
+            continue
+        if any(normalized == term or normalized in term or term in normalized for term in known_terms):
+            synonym_matches += 1
+
+    return synonym_matches, non_null_count
+
+
+def _detect_header_row(preview_rows: list[list]) -> int:
+    """
+    Pick the most likely header row index (0-based) from a preview of raw
+    rows (pandas output with header=None, so every row -- including what
+    would otherwise be treated as the header -- is just data).
+
+    Falls back to the first row with at least 2 filled cells if nothing
+    scores a field-name match, and ultimately to row 0, so a well-formed
+    simple file whose header is already on row 0 -- the common case --
+    behaves exactly as it did before this function existed.
+    """
+    best_index: int | None = None
+    best_score = (-1, -1)
+    fallback_index: int | None = None
+
+    for index, row in enumerate(preview_rows):
+        synonym_matches, non_null_count = _score_header_row(row)
+        if non_null_count == 0:
+            continue  # fully blank spacer row -- never the header
+        if fallback_index is None and non_null_count >= 2:
+            fallback_index = index
+        score = (synonym_matches, non_null_count)
+        if score > best_score:
+            best_score = score
+            best_index = index
+
+    if best_index is not None and best_score[0] > 0:
+        return best_index
+    if fallback_index is not None:
+        return fallback_index
+    return 0
+
+
+def _read_preview_rows_csv(file_bytes: bytes, max_rows: int) -> list[list]:
+    """Read the first `max_rows` raw rows of a CSV as lists of cell
+    strings, using Python's csv module instead of pandas.
+
+    Title/company-name rows above the real header typically have far
+    fewer comma-separated fields than the data rows below them (e.g. one
+    cell of text vs. five data columns), which trips pandas' C-engine
+    tokenizer with a hard "Expected N fields, saw M" ParserError before
+    we ever get a chance to find the real header row. csv.reader makes no
+    such fixed-width assumption, so it reads straight through a ragged
+    file without erroring.
+    """
+    text = file_bytes.decode("utf-8-sig", errors="replace")
+    rows: list[list] = []
+    for index, row in enumerate(csv.reader(io.StringIO(text))):
+        if index >= max_rows:
+            break
+        rows.append(row)
+    return rows
+
+
+def _read_preview_rows_xlsx(file_bytes: bytes, max_rows: int) -> list[list]:
+    """Read the first `max_rows` raw rows of an .xlsx as lists of cell
+    values, using openpyxl directly. Excel rows are already rectangular
+    (no ragged-field issue like CSV), but reading directly here -- rather
+    than via pandas -- keeps both formats going through the same
+    lightweight, tolerant preview path.
+    """
+    workbook = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    try:
+        sheet = workbook.active
+        rows: list[list] = []
+        for index, row in enumerate(sheet.iter_rows(values_only=True)):
+            if index >= max_rows:
+                break
+            rows.append(list(row))
+        return rows
+    finally:
+        workbook.close()
 
 
 def suggest_mapping(headers: list[str]) -> dict[str, str | None]:
@@ -139,9 +255,28 @@ def parse_upload(file_bytes: bytes, filename: str) -> tuple[list[str], list[dict
 
     try:
         if extension == ".csv":
-            df = pd.read_csv(io.BytesIO(file_bytes))
+            preview_rows = _read_preview_rows_csv(file_bytes, HEADER_SCAN_ROWS)
         else:
-            df = pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
+            preview_rows = _read_preview_rows_xlsx(file_bytes, HEADER_SCAN_ROWS)
+    except Exception as exc:  # noqa: BLE001 -- any parse failure becomes a clean 400
+        raise AppError(f"Could not read file: {exc}", code="parse_error") from exc
+
+    header_row_index = _detect_header_row(preview_rows)
+
+    # skiprows (not header=N) so any ragged junk rows above the real
+    # header -- title/company-name lines with far fewer fields than the
+    # data columns -- are dropped as raw text before pandas ever tries to
+    # tokenize them. Passing header=N directly would still make pandas'
+    # C engine read through those same ragged lines on the way to the
+    # header and can raise the same ParserError _read_preview_rows_csv
+    # was written to avoid.
+    try:
+        if extension == ".csv":
+            df = pd.read_csv(io.BytesIO(file_bytes), skiprows=header_row_index, header=0)
+        else:
+            df = pd.read_excel(
+                io.BytesIO(file_bytes), skiprows=header_row_index, header=0, engine="openpyxl"
+            )
     except Exception as exc:  # noqa: BLE001 -- any parse failure becomes a clean 400
         raise AppError(f"Could not read file: {exc}", code="parse_error") from exc
 
