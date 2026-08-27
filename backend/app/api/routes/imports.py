@@ -96,16 +96,19 @@ def confirm_import(
         import_session.raw_rows, payload.mapping
     )
 
+    # valid_rows' keys are exactly Transaction's data columns (see
+    # validate_and_convert_rows' docstring) -- unpacking directly, rather
+    # than re-listing every field here, is what makes this pipeline
+    # reusable: a future Google Sheets sync or POS sync that produces the
+    # same (headers, rows) shape and calls the same validate_and_convert_rows
+    # can persist through this exact same shape with no route-level
+    # changes when new optional fields are added later.
     for row in valid_rows:
         db.add(
             Transaction(
                 business_id=business.id,
                 import_session_id=import_session.id,
-                date=row["date"],
-                product=row["product"],
-                quantity=row["quantity"],
-                selling_price=row["selling_price"],
-                cost_price=row.get("cost_price"),
+                **row,
             )
         )
 
