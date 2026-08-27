@@ -11,9 +11,9 @@ import MetricCard from "@/components/MetricCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import styles from "./overview.module.css";
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
+const currencyFormatter = new Intl.NumberFormat("en-NG", {
   style: "currency",
-  currency: "USD",
+  currency: "NGN",
   maximumFractionDigits: 2,
 });
 
