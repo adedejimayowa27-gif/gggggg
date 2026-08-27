@@ -33,7 +33,12 @@ from app.services.analytics import (
     BREAKDOWN_UNSET_LABELS,
     BreakdownField,
     DateRangePreset,
+    cost_expr,
+    period_filters,
     resolve_date_range,
+    revenue_expr,
+    transaction_count_expr,
+    units_expr,
 )
 
 _VALID_PRODUCT_METRICS = {
@@ -76,12 +81,12 @@ def _validate_metric(metric: str) -> None:
         )
 
 
-def _period_filters(business: Business, start_date: date, end_date: date):
-    return (
-        Transaction.business_id == business.id,
-        Transaction.date >= start_date,
-        Transaction.date <= end_date,
-    )
+# Batch 6.7: the (business_id, date range) filter triple and the revenue/
+# cost/units/count SQL expressions used throughout this file now live in
+# app.services.analytics, shared with app.api.routes.analytics -- see that
+# module's docstring. `_period_filters` stays as a thin local alias so the
+# rest of this file (and its many call sites below) doesn't need touching.
+_period_filters = period_filters
 
 
 def _to_float(value, ndigits: int = 2) -> float:
@@ -104,12 +109,11 @@ def get_revenue(db: Session, business: Business, start_date: date, end_date: dat
     """
     _validate_range(start_date, end_date)
 
-    revenue_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.selling_price), 0
-    )
-    count_expr = func.count(Transaction.id)
     row = (
-        db.query(revenue_expr.label("revenue"), count_expr.label("transaction_count"))
+        db.query(
+            revenue_expr().label("revenue"),
+            transaction_count_expr().label("transaction_count"),
+        )
         .filter(*_period_filters(business, start_date, end_date))
         .one()
     )
@@ -135,19 +139,11 @@ def get_profit(db: Session, business: Business, start_date: date, end_date: date
     """
     _validate_range(start_date, end_date)
 
-    revenue_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.selling_price), 0
-    )
-    cost_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.cost_price), 0
-    )
-    count_expr = func.count(Transaction.id)
-
     row = (
         db.query(
-            revenue_expr.label("revenue"),
-            cost_expr.label("total_cost"),
-            count_expr.label("transaction_count"),
+            revenue_expr().label("revenue"),
+            cost_expr().label("total_cost"),
+            transaction_count_expr().label("transaction_count"),
         )
         .filter(*_period_filters(business, start_date, end_date))
         .one()
@@ -182,12 +178,11 @@ def get_expenses(db: Session, business: Business, start_date: date, end_date: da
     """
     _validate_range(start_date, end_date)
 
-    cost_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.cost_price), 0
-    )
-    count_expr = func.count(Transaction.id)
     row = (
-        db.query(cost_expr.label("total_cost"), count_expr.label("transaction_count"))
+        db.query(
+            cost_expr().label("total_cost"),
+            transaction_count_expr().label("transaction_count"),
+        )
         .filter(*_period_filters(business, start_date, end_date))
         .one()
     )
@@ -214,21 +209,12 @@ def get_product_sales(
     """Units, revenue, cost and profit for a single named product (case-insensitive exact match)."""
     _validate_range(start_date, end_date)
 
-    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
-    revenue_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.selling_price), 0
-    )
-    cost_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.cost_price), 0
-    )
-    count_expr = func.count(Transaction.id)
-
     row = (
         db.query(
-            units_expr.label("units_sold"),
-            revenue_expr.label("revenue"),
-            cost_expr.label("total_cost"),
-            count_expr.label("transaction_count"),
+            units_expr().label("units_sold"),
+            revenue_expr().label("revenue"),
+            cost_expr().label("total_cost"),
+            transaction_count_expr().label("transaction_count"),
         )
         .filter(
             *_period_filters(business, start_date, end_date),
@@ -261,22 +247,13 @@ def get_product_sales(
 
 def _product_breakdown(db: Session, business: Business, start_date: date, end_date: date) -> list[dict]:
     """Per-product totals for [start_date, end_date], one SQL GROUP BY query. Internal helper."""
-    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
-    revenue_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.selling_price), 0
-    )
-    cost_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.cost_price), 0
-    )
-    count_expr = func.count(Transaction.id)
-
     rows = (
         db.query(
             Transaction.product.label("product"),
-            units_expr.label("units_sold"),
-            revenue_expr.label("revenue"),
-            cost_expr.label("total_cost"),
-            count_expr.label("transaction_count"),
+            units_expr().label("units_sold"),
+            revenue_expr().label("revenue"),
+            cost_expr().label("total_cost"),
+            transaction_count_expr().label("transaction_count"),
         )
         .filter(*_period_filters(business, start_date, end_date))
         .group_by(Transaction.product)
@@ -418,27 +395,19 @@ def get_breakdown(
         ) from exc
 
     group_column = _GROUP_BY_COLUMNS[field]
-
-    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
-    revenue_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.selling_price), 0
-    )
-    cost_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.cost_price), 0
-    )
-    count_expr = func.count(Transaction.id)
+    revenue_column = revenue_expr()
 
     rows = (
         db.query(
             group_column.label("group_value"),
-            units_expr.label("units_sold"),
-            revenue_expr.label("revenue"),
-            cost_expr.label("total_cost"),
-            count_expr.label("transaction_count"),
+            units_expr().label("units_sold"),
+            revenue_column.label("revenue"),
+            cost_expr().label("total_cost"),
+            transaction_count_expr().label("transaction_count"),
         )
         .filter(*_period_filters(business, start_date, end_date))
         .group_by(group_column)
-        .order_by(revenue_expr.desc())
+        .order_by(revenue_column.desc())
         .limit(limit)
         .all()
     )
