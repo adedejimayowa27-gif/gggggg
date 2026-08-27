@@ -19,6 +19,9 @@ class TransactionOut(BaseModel):
     quantity: Decimal
     selling_price: Decimal
     cost_price: Decimal | None
+    category: str | None
+    customer: str | None
+    payment_method: str | None
     created_at: datetime
 
 
