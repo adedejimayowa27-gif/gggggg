@@ -79,6 +79,9 @@ export interface Transaction {
   quantity: string;
   selling_price: string;
   cost_price: string | null;
+  category: string | null;
+  customer: string | null;
+  payment_method: string | null;
   created_at: string;
 }
 
