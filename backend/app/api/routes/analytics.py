@@ -32,7 +32,12 @@ from app.services.analytics import (
     BreakdownField,
     DateRangePreset,
     Granularity,
+    cost_expr,
+    period_filters,
     resolve_date_range,
+    revenue_expr,
+    transaction_count_expr,
+    units_expr,
 )
 
 router = APIRouter(prefix="/businesses/{business_id}/analytics", tags=["analytics"])
@@ -48,27 +53,14 @@ def get_analytics_summary(
 ):
     resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
 
-    revenue_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.selling_price), 0
-    )
-    cost_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.cost_price), 0
-    )
-    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
-    count_expr = func.count(Transaction.id)
-
     row = (
         db.query(
-            revenue_expr.label("revenue"),
-            cost_expr.label("total_cost"),
-            units_expr.label("units_sold"),
-            count_expr.label("transaction_count"),
+            revenue_expr().label("revenue"),
+            cost_expr().label("total_cost"),
+            units_expr().label("units_sold"),
+            transaction_count_expr().label("transaction_count"),
         )
-        .filter(
-            Transaction.business_id == business.id,
-            Transaction.date >= resolved_start,
-            Transaction.date <= resolved_end,
-        )
+        .filter(*period_filters(business, resolved_start, resolved_end))
         .one()
     )
 
@@ -113,24 +105,13 @@ def get_analytics_timeseries(
     # response schema (and the client) get plain dates, not timestamps.
     period_expr = func.date_trunc(granularity.value, Transaction.date).cast(Date)
 
-    revenue_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.selling_price), 0
-    )
-    cost_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.cost_price), 0
-    )
-
     rows = (
         db.query(
             period_expr.label("period_start"),
-            revenue_expr.label("revenue"),
-            cost_expr.label("total_cost"),
+            revenue_expr().label("revenue"),
+            cost_expr().label("total_cost"),
         )
-        .filter(
-            Transaction.business_id == business.id,
-            Transaction.date >= resolved_start,
-            Transaction.date <= resolved_end,
-        )
+        .filter(*period_filters(business, resolved_start, resolved_end))
         .group_by(period_expr)
         .order_by(period_expr)
         .all()
@@ -165,30 +146,17 @@ def get_analytics_products(
 ):
     resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
 
-    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
-    revenue_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.selling_price), 0
-    )
-    cost_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.cost_price), 0
-    )
-    count_expr = func.count(Transaction.id)
-
     # Single grouped aggregation by product -- every per-product number
     # (units, revenue, cost, profit, count) comes from this one query.
     rows = (
         db.query(
             Transaction.product.label("product"),
-            units_expr.label("units_sold"),
-            revenue_expr.label("revenue"),
-            cost_expr.label("total_cost"),
-            count_expr.label("transaction_count"),
+            units_expr().label("units_sold"),
+            revenue_expr().label("revenue"),
+            cost_expr().label("total_cost"),
+            transaction_count_expr().label("transaction_count"),
         )
-        .filter(
-            Transaction.business_id == business.id,
-            Transaction.date >= resolved_start,
-            Transaction.date <= resolved_end,
-        )
+        .filter(*period_filters(business, resolved_start, resolved_end))
         .group_by(Transaction.product)
         .all()
     )
@@ -247,31 +215,19 @@ def get_analytics_breakdown(
 ):
     resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
     group_column = _GROUP_BY_COLUMNS[group_by]
-
-    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
-    revenue_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.selling_price), 0
-    )
-    cost_expr = func.coalesce(
-        func.sum(Transaction.quantity * Transaction.cost_price), 0
-    )
-    count_expr = func.count(Transaction.id)
+    revenue_column = revenue_expr()
 
     rows = (
         db.query(
             group_column.label("group_value"),
-            units_expr.label("units_sold"),
-            revenue_expr.label("revenue"),
-            cost_expr.label("total_cost"),
-            count_expr.label("transaction_count"),
+            units_expr().label("units_sold"),
+            revenue_column.label("revenue"),
+            cost_expr().label("total_cost"),
+            transaction_count_expr().label("transaction_count"),
         )
-        .filter(
-            Transaction.business_id == business.id,
-            Transaction.date >= resolved_start,
-            Transaction.date <= resolved_end,
-        )
+        .filter(*period_filters(business, resolved_start, resolved_end))
         .group_by(group_column)
-        .order_by(revenue_expr.desc())
+        .order_by(revenue_column.desc())
         .limit(limit)
         .all()
     )
