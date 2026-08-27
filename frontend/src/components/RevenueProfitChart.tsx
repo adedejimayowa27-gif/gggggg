@@ -40,15 +40,15 @@ const GRANULARITIES: { label: string; value: Granularity }[] = [
   { label: "Month", value: "month" },
 ];
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
+const currencyFormatter = new Intl.NumberFormat("en-NG", {
   style: "currency",
-  currency: "USD",
+  currency: "NGN",
   maximumFractionDigits: 0,
 });
 
 function formatCurrencyShort(value: number): string {
   if (Math.abs(value) >= 1000) {
-    return `${value < 0 ? "-" : ""}$${(Math.abs(value) / 1000).toFixed(1)}k`;
+    return `${value < 0 ? "-" : ""}₦${(Math.abs(value) / 1000).toFixed(1)}k`;
   }
   return currencyFormatter.format(value);
 }
