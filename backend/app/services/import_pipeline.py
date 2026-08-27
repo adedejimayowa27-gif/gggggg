@@ -354,6 +354,31 @@ def _parse_decimal_value(value, field_label: str, allow_negative: bool = False) 
     return parsed
 
 
+def _normalize_optional_text(
+    raw_row: dict, mapping: dict[str, str | None], field: str, max_length: int
+) -> str | None:
+    """
+    Pull an optional free-text field (category/customer/payment_method)
+    out of a raw row, or None if it's unmapped or blank.
+
+    Shared by every optional text field so category/customer/payment_method
+    all get identical treatment -- trimmed, capped to the column's max
+    length rather than erroring on an overlong value (a truncated label is
+    still useful; a hard failure on a cosmetic overflow is not), and never
+    silently promoted into a real value when the source cell was blank.
+    """
+    column = mapping.get(field)
+    if not column:
+        return None
+    raw_value = raw_row.get(column)
+    if raw_value is None:
+        return None
+    text = str(raw_value).strip()
+    if not text:
+        return None
+    return text[:max_length]
+
+
 def validate_and_convert_rows(
     raw_rows: list[dict], mapping: dict[str, str | None]
 ) -> tuple[list[dict], list[dict]]:
@@ -362,8 +387,12 @@ def validate_and_convert_rows(
     converting each one.
 
     Returns (valid_rows, row_errors):
-    - valid_rows: list of dicts with keys date/product/quantity/
-      selling_price/cost_price, ready to construct Transaction objects.
+    - valid_rows: list of dicts with keys matching Transaction's column
+      names exactly (date/product/quantity/selling_price/cost_price/
+      category/customer/payment_method), ready to be passed straight
+      into `Transaction(**row)` -- this is what keeps the import route
+      itself free of any per-field wiring, and what a future data source
+      (Google Sheets sync, POS sync) reuses unchanged.
     - row_errors: list of {"row_number": int, "errors": [str, ...]},
       1-indexed against the data rows (not counting the header).
     """
@@ -392,7 +421,7 @@ def validate_and_convert_rows(
         if not product_str:
             errors.append("Product is required.")
         else:
-            converted["product"] = product_str
+            converted["product"] = product_str[:255]
 
         try:
             converted["quantity"] = _parse_decimal_value(
@@ -422,6 +451,16 @@ def validate_and_convert_rows(
                 converted["cost_price"] = None
         else:
             converted["cost_price"] = None
+
+        # Optional free-text fields (Batch 6.1/6.3/6.4) -- never block the
+        # row on these. A too-long or oddly formatted category/customer/
+        # payment method is a data-quality nitpick, not a reason to
+        # reject an otherwise valid sale.
+        converted["category"] = _normalize_optional_text(raw_row, mapping, "category", 255)
+        converted["customer"] = _normalize_optional_text(raw_row, mapping, "customer", 255)
+        converted["payment_method"] = _normalize_optional_text(
+            raw_row, mapping, "payment_method", 100
+        )
 
         if errors:
             row_errors.append({"row_number": row_number, "errors": errors})
