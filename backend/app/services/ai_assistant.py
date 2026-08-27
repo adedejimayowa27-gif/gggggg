@@ -21,6 +21,7 @@ so a confused model can't spin forever running up API cost.
 """
 import json
 import logging
+import re
 from datetime import date
 from typing import Any, Callable
 
@@ -152,16 +153,25 @@ returns. Do not compute date ranges yourself.
 4. If a tool result has "has_data": false, or "transaction_count": 0, or an empty "products" \
 list, that means there is genuinely no data for what you asked -- not that the value is zero in \
 a meaningful sense. Say so plainly (e.g. "There's no recorded sales data for that period") \
-instead of stating a $0 figure as if it were a real result, and never guess, estimate, or infer \
+instead of stating a zero figure as if it were a real result, and never guess, estimate, or infer \
 what the number might have been. Do not speculate about why the data is missing (e.g. do not \
 assume the business was closed) -- just report the absence and, if useful, suggest the user \
 double-check the date range or that data was imported for that period.
 5. You can only see this one business's data. You have no way to answer questions about any \
 other business, and you should say so if asked.
-6. Once you have the data you need, answer in clear, concise natural language -- a short \
-paragraph or a few bullet points. Do not dump raw JSON at the user; translate the numbers into \
-an answer to what they actually asked. Cite the date range you used when it's not obvious.
-7. If the question is not about this business's sales data (e.g. general chit-chat, advice \
+6. All monetary figures from tool results are in Nigerian Naira. Always write amounts with the \
+₦ symbol and comma thousands separators (e.g. ₦1,234,567 or ₦45,000.50) -- never $, USD, or any \
+other currency, and never convert the number into another currency.
+7. Write your reply as plain conversational text only -- this is rendered in a plain chat \
+bubble with no markdown support. Do not use asterisks, underscores, backticks, "#" headers, or \
+any other markdown/formatting syntax (no **bold**, no _italics_, no bullet "*"/"-" lists). If you \
+want to list a few items, write them as a short sentence or number them inline in plain prose \
+(e.g. "1. ..., 2. ..., 3. ...") instead of using markdown list markers.
+8. Once you have the data you need, answer in clear, concise natural language -- a short \
+paragraph or a few short numbered points as plain text. Do not dump raw JSON at the user; \
+translate the numbers into an answer to what they actually asked. Cite the date range you used \
+when it's not obvious.
+9. If the question is not about this business's sales data (e.g. general chit-chat, advice \
 unrelated to the numbers), answer briefly and helpfully without calling a tool.
 """
 
@@ -460,6 +470,36 @@ def _execute_tool(db: Session, business: Business, name: str, arguments_json: st
 # The loop itself
 # ---------------------------------------------------------------------------
 
+# Matches: **bold**/__bold__, *italic*/_italic_, `inline code`, "# " headers
+# at line start, and "- "/"* " bullet markers at line start. Applied as a
+# safety net after the model replies -- rule 7 in the system prompt already
+# tells it not to use markdown, but models occasionally slip back into it
+# out of habit, and the chat bubble renders plain text with no markdown
+# support, so a literal "**Revenue**" would otherwise reach the user as-is.
+_MD_BOLD_ITALIC_RE = re.compile(r"(\*\*\*|\*\*|\*|___|__|_)(\S.*?\S|\S)\1")
+_MD_INLINE_CODE_RE = re.compile(r"`([^`]*)`")
+_MD_HEADER_RE = re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE)
+_MD_BULLET_RE = re.compile(r"^\s*[-*]\s+", re.MULTILINE)
+
+
+def _strip_markdown(text: str) -> str:
+    """Best-effort removal of common markdown syntax from a model reply,
+    leaving the underlying words intact. Not a full markdown parser --
+    just enough to catch **bold**, *italic*, `code`, "# " headers, and
+    "- "/"* " bullets, which are the forms a chat-tuned model tends to
+    reach for even when told to use plain text.
+    """
+    text = _MD_HEADER_RE.sub("", text)
+    text = _MD_BULLET_RE.sub("", text)
+    text = _MD_INLINE_CODE_RE.sub(r"\1", text)
+    # Bold/italic markers can nest/repeat, so apply a couple of passes.
+    for _ in range(3):
+        new_text = _MD_BOLD_ITALIC_RE.sub(r"\2", text)
+        if new_text == text:
+            break
+        text = new_text
+    return text.strip()
+
 
 def run_assistant(db: Session, business: Business, history: list[dict]) -> str:
     """
@@ -492,7 +532,7 @@ def run_assistant(db: Session, business: Business, history: list[dict]) -> str:
 
         if not tool_calls:
             text = (message.content or "").strip()
-            return text or "I wasn't able to generate a response to that."
+            return _strip_markdown(text) if text else "I wasn't able to generate a response to that."
 
         # Echo the assistant's tool-call turn back, then answer every
         # tool_call with a matching "tool" message before the next round
@@ -546,7 +586,7 @@ def run_assistant(db: Session, business: Business, history: list[dict]) -> str:
                 response = _call_model(client, messages, force_no_tools=True)
                 text = (response.choices[0].message.content or "").strip()
                 if text:
-                    return text
+                    return _strip_markdown(text)
             except AssistantUnavailableError:
                 pass
             return (
