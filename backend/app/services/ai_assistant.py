@@ -24,6 +24,7 @@ import logging
 from datetime import date
 from typing import Any, Callable
 
+import openai
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
@@ -36,6 +37,14 @@ logger = logging.getLogger("app")
 
 MAX_TOOL_ITERATIONS = 6
 
+# A single iteration can itself contain several parallel tool_calls (e.g. the
+# model asks for get_revenue and get_profit in the same round trip), so
+# capping iterations alone doesn't bound total tool executions. This is the
+# hard ceiling on tool calls actually run in one call to `run_assistant`,
+# checked as each call is about to execute -- once hit, no further tool
+# calls are run and the loop is told to wrap up with what it already has.
+MAX_TOOL_CALLS_PER_TURN = 12
+
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Keep in sync with app.services.ai_tools._VALID_PRODUCT_METRICS -- duplicated
@@ -44,6 +53,71 @@ GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 _METRICS = ["units_sold", "revenue", "total_cost", "gross_profit", "transaction_count"]
 
 _client: OpenAI | None = None
+
+
+class AssistantUnavailableError(AppError):
+    """Raised when the Groq/LLM API call itself fails (network, timeout,
+    rate limit, auth, or a 5xx from Groq) -- as opposed to ValidationError,
+    which covers bad tool arguments. Kept distinct so the route surfaces a
+    "try again in a moment" message and a 503 rather than a generic 500,
+    and so it's easy for the frontend to distinguish "the assistant is
+    temporarily down" from "something in the request was wrong."
+    """
+
+    status_code = 503
+    code = "assistant_unavailable"
+
+
+def _call_model(client: OpenAI, messages: list[dict], force_no_tools: bool = False):
+    """Single LLM round trip, with the Groq/OpenAI-SDK failure modes turned
+    into an AssistantUnavailableError instead of propagating a raw SDK
+    exception up through the route as an unhandled 500. `force_no_tools` is
+    used for the one-shot "wrap up in words" call after the per-turn tool
+    call cap is hit, so the model can't ask for yet another tool call there.
+    """
+    try:
+        return client.chat.completions.create(
+            model=settings.GROQ_MODEL,
+            max_tokens=1024,
+            messages=messages,
+            tools=None if force_no_tools else TOOLS,
+        )
+    except openai.RateLimitError as exc:
+        logger.warning("Groq rate limit hit: %s", exc)
+        raise AssistantUnavailableError(
+            "The assistant is getting a lot of requests right now. Please try again in a moment."
+        ) from exc
+    except openai.APITimeoutError as exc:
+        logger.warning("Groq request timed out: %s", exc)
+        raise AssistantUnavailableError(
+            "The assistant took too long to respond. Please try again."
+        ) from exc
+    except openai.APIConnectionError as exc:
+        logger.warning("Could not reach Groq API: %s", exc)
+        raise AssistantUnavailableError(
+            "Couldn't reach the assistant service. Please check your connection and try again."
+        ) from exc
+    except openai.AuthenticationError as exc:
+        # Misconfigured API key -- not the user's fault, but also not
+        # something retrying will fix, so this is logged loudly.
+        logger.error("Groq authentication failed -- check GROQ_API_KEY: %s", exc)
+        raise AssistantUnavailableError(
+            "The assistant isn't configured correctly right now. Please try again later."
+        ) from exc
+    except openai.APIStatusError as exc:
+        # Any other 4xx/5xx from Groq we didn't specifically handle above.
+        logger.warning("Groq API returned an error status: %s", exc)
+        raise AssistantUnavailableError(
+            "The assistant service returned an error. Please try again in a moment."
+        ) from exc
+    except openai.APIError as exc:
+        # Catch-all for any other openai-sdk-raised error (malformed
+        # response, SDK-side bug, etc.) so nothing from this call can ever
+        # reach the route as a raw, unhandled exception.
+        logger.exception("Unexpected Groq/OpenAI SDK error: %s", exc)
+        raise AssistantUnavailableError(
+            "The assistant ran into an unexpected error. Please try again."
+        ) from exc
 
 
 def _get_client() -> OpenAI:
@@ -75,12 +149,19 @@ in this turn, you do not know it.
 returns. Do not compute date ranges yourself.
 3. If a tool call fails or returns an error, do not paper over it -- either try a corrected call \
 (e.g. a fixed date range or product name) or tell the user plainly what went wrong.
-4. You can only see this one business's data. You have no way to answer questions about any \
+4. If a tool result has "has_data": false, or "transaction_count": 0, or an empty "products" \
+list, that means there is genuinely no data for what you asked -- not that the value is zero in \
+a meaningful sense. Say so plainly (e.g. "There's no recorded sales data for that period") \
+instead of stating a $0 figure as if it were a real result, and never guess, estimate, or infer \
+what the number might have been. Do not speculate about why the data is missing (e.g. do not \
+assume the business was closed) -- just report the absence and, if useful, suggest the user \
+double-check the date range or that data was imported for that period.
+5. You can only see this one business's data. You have no way to answer questions about any \
 other business, and you should say so if asked.
-5. Once you have the data you need, answer in clear, concise natural language -- a short \
+6. Once you have the data you need, answer in clear, concise natural language -- a short \
 paragraph or a few bullet points. Do not dump raw JSON at the user; translate the numbers into \
 an answer to what they actually asked. Cite the date range you used when it's not obvious.
-6. If the question is not about this business's sales data (e.g. general chit-chat, advice \
+7. If the question is not about this business's sales data (e.g. general chit-chat, advice \
 unrelated to the numbers), answer briefly and helpfully without calling a tool.
 """
 
@@ -400,13 +481,11 @@ def run_assistant(db: Session, business: Business, history: list[dict]) -> str:
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     messages.extend({"role": h["role"], "content": h["content"]} for h in history)
 
+    total_tool_calls = 0
+    call_limit_hit = False
+
     for _ in range(MAX_TOOL_ITERATIONS):
-        response = client.chat.completions.create(
-            model=settings.GROQ_MODEL,
-            max_tokens=1024,
-            messages=messages,
-            tools=TOOLS,
-        )
+        response = _call_model(client, messages)
 
         message = response.choices[0].message
         tool_calls = message.tool_calls or []
@@ -417,7 +496,9 @@ def run_assistant(db: Session, business: Business, history: list[dict]) -> str:
 
         # Echo the assistant's tool-call turn back, then answer every
         # tool_call with a matching "tool" message before the next round
-        # trip -- the API requires one tool result per tool_call.
+        # trip -- the API requires one tool result per tool_call, so even
+        # once the per-turn cap is hit we still have to give each call_id a
+        # result (an "error" one) rather than silently dropping it.
         messages.append(
             {
                 "role": "assistant",
@@ -434,13 +515,44 @@ def run_assistant(db: Session, business: Business, history: list[dict]) -> str:
         )
 
         for call in tool_calls:
-            result = _execute_tool(db, business, call.function.name, call.function.arguments)
+            if total_tool_calls >= MAX_TOOL_CALLS_PER_TURN:
+                call_limit_hit = True
+                result = {
+                    "error": (
+                        "Tool call limit reached for this turn. Stop calling tools and answer "
+                        "using only the data already gathered, noting anything you couldn't check."
+                    )
+                }
+            else:
+                result = _execute_tool(db, business, call.function.name, call.function.arguments)
+                total_tool_calls += 1
             messages.append(
                 {
                     "role": "tool",
                     "tool_call_id": call.id,
                     "content": json.dumps(result),
                 }
+            )
+
+        if call_limit_hit:
+            logger.warning(
+                "Assistant tool loop hit MAX_TOOL_CALLS_PER_TURN (%s) for business %s",
+                MAX_TOOL_CALLS_PER_TURN,
+                business.id,
+            )
+            # Give the model one more turn to wrap up in words using
+            # whatever it already has, rather than cutting it off cold.
+            try:
+                response = _call_model(client, messages, force_no_tools=True)
+                text = (response.choices[0].message.content or "").strip()
+                if text:
+                    return text
+            except AssistantUnavailableError:
+                pass
+            return (
+                "That question needed more lookups than I'm allowed to run at once. "
+                "Could you split it into a couple of narrower questions (e.g. one metric or "
+                "date range at a time)?"
             )
 
     logger.warning("Assistant tool loop hit MAX_TOOL_ITERATIONS for business %s", business.id)
