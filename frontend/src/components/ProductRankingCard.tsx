@@ -23,9 +23,9 @@ interface Props {
   error?: string | null;
 }
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
+const currencyFormatter = new Intl.NumberFormat("en-NG", {
   style: "currency",
-  currency: "USD",
+  currency: "NGN",
   maximumFractionDigits: 2,
 });
 
