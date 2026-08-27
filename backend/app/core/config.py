@@ -34,8 +34,13 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     # Pick a Groq-hosted model that supports tool calling -- check
     # https://console.groq.com/docs/models for the current list, since
-    # Groq's lineup changes more often than a typical API.
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    # Groq's lineup changes more often than a typical API. (llama-3.3-70b-
+    # versatile and llama-3.1-8b-instant were moved to Enterprise-only
+    # access as of Aug 2026, so a normal developer API key gets a 404
+    # "model does not exist or you do not have access to it" on them --
+    # openai/gpt-oss-120b is the current general-access production model
+    # with tool-calling support.)
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
 
     model_config = SettingsConfigDict(
         env_file=".env",
