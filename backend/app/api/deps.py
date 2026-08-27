@@ -16,6 +16,7 @@ from app.core.exceptions import NotFoundError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.business import Business
+from app.models.chat_conversation import ChatConversation
 from app.models.user import User
 
 # tokenUrl is only used by the OpenAPI docs UI to know where to fetch a token from.
@@ -69,3 +70,31 @@ def get_owned_business(
     if not business:
         raise NotFoundError("Business not found.")
     return business
+
+
+def get_owned_conversation(
+    conversation_id: uuid.UUID, business: Business, db: Session
+) -> ChatConversation:
+    """
+    Fetch a chat conversation by ID, scoped to a given (already
+    ownership-checked) business.
+
+    Batch 6.7: previously defined identically in both app.api.routes.chat
+    and app.api.routes.assistant.py -- consolidated here alongside
+    get_owned_business so there is one place a conversation's business
+    scoping is enforced, the same reasoning as get_owned_business above.
+    Called directly (not via FastAPI's Depends) since callers already have
+    `business` from their own get_owned_business dependency and only need
+    this when a request also references a specific conversation_id.
+    """
+    conversation = (
+        db.query(ChatConversation)
+        .filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.business_id == business.id,
+        )
+        .first()
+    )
+    if not conversation:
+        raise NotFoundError("Conversation not found.")
+    return conversation
