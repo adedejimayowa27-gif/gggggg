@@ -4,9 +4,10 @@ Reusable transaction-import pipeline.
 This module knows nothing about HTTP or the database -- it just turns
 raw spreadsheet bytes (or, in the future, rows from Google Sheets/a POS
 API) into a list of plain dicts, plus a suggested mapping from those
-columns onto our five standard fields. Keeping this separate from the
-route means a future data source only needs to produce the same
-(headers, rows) shape to reuse everything below.
+columns onto our eight standard fields (5 required-capable + 3 optional).
+Keeping this separate from the route means a future data source only
+needs to produce the same (headers, rows) shape to reuse everything
+below.
 """
 import csv
 import io
@@ -20,7 +21,21 @@ import pandas as pd
 from app.core.exceptions import AppError
 
 REQUIRED_FIELDS = ["date", "product", "quantity", "selling_price"]
-STANDARD_FIELDS = ["date", "product", "quantity", "selling_price", "cost_price"]
+# Batch 6.3: category, customer, and payment_method complete the 8-field
+# standard schema (see Transaction model). All three are optional, same
+# as cost_price -- a file that doesn't have them, or a user who leaves
+# them unmapped, imports exactly as before.
+STANDARD_FIELDS = [
+    "date",
+    "product",
+    "quantity",
+    "selling_price",
+    "cost_price",
+    "category",
+    "customer",
+    "payment_method",
+]
+OPTIONAL_FIELDS = [f for f in STANDARD_FIELDS if f not in REQUIRED_FIELDS]
 
 # Known header variants for each standard field, used for automatic
 # column-mapping suggestions. Add more synonyms here as real-world files
@@ -46,6 +61,18 @@ FIELD_SYNONYMS: dict[str, list[str]] = {
     "cost_price": [
         "cost price", "cost", "unit cost", "cogs", "purchase price",
         "cost per unit",
+    ],
+    "category": [
+        "category", "product category", "item category", "type",
+        "product type", "department", "class", "product class",
+    ],
+    "customer": [
+        "customer", "customer name", "client", "client name", "buyer",
+        "bought by", "sold to", "customer id",
+    ],
+    "payment_method": [
+        "payment method", "payment type", "payment mode", "method of payment",
+        "pay method", "mode of payment", "payment",
     ],
 }
 
