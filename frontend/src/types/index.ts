@@ -142,3 +142,32 @@ export interface ProductAnalytics {
   lowest_profit: ProductAnalyticsItem[];
   slow_moving: ProductAnalyticsItem[];
 }
+
+// --- AI assistant / chat ----------------------------------------------
+//
+// Mirrors backend/app/schemas/chat.py and backend/app/schemas/assistant.py.
+
+export type ChatRole = "user" | "assistant" | "system";
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  role: ChatRole;
+  content: string;
+  created_at: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  business_id: string;
+  user_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssistantMessageResponse {
+  conversation_id: string;
+  user_message: ChatMessage;
+  assistant_message: ChatMessage;
+}
