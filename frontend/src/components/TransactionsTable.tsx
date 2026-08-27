@@ -58,6 +58,9 @@ export default function TransactionsTable({ businessId, refreshSignal }: Props) 
               <th>Quantity</th>
               <th>Selling Price</th>
               <th>Cost Price</th>
+              <th>Category</th>
+              <th>Customer</th>
+              <th>Payment Method</th>
             </tr>
           </thead>
           <tbody>
@@ -68,6 +71,9 @@ export default function TransactionsTable({ businessId, refreshSignal }: Props) 
                 <td>{t.quantity}</td>
                 <td>{t.selling_price}</td>
                 <td>{t.cost_price ?? "—"}</td>
+                <td>{t.category ?? "—"}</td>
+                <td>{t.customer ?? "—"}</td>
+                <td>{t.payment_method ?? "—"}</td>
               </tr>
             ))}
           </tbody>
