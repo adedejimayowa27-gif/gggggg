@@ -27,6 +27,9 @@ export const STANDARD_FIELDS = [
   "quantity",
   "selling_price",
   "cost_price",
+  "category",
+  "customer",
+  "payment_method",
 ] as const;
 
 export type StandardField = (typeof STANDARD_FIELDS)[number];
