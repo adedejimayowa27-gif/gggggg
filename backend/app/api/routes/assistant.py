@@ -10,13 +10,10 @@ chat.py; this route reuses those models directly rather than duplicating
 them, and only adds the LLM round trip in between saving the user's
 message and saving the assistant's reply.
 """
-import uuid
-
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_owned_business
-from app.core.exceptions import NotFoundError
+from app.api.deps import get_current_user, get_owned_business, get_owned_conversation
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.chat_conversation import ChatConversation
@@ -27,22 +24,6 @@ from app.schemas.chat import ChatMessageOut
 from app.services.ai_assistant import run_assistant
 
 router = APIRouter(prefix="/businesses/{business_id}/assistant", tags=["assistant"])
-
-
-def _get_owned_conversation(
-    conversation_id: uuid.UUID, business: Business, db: Session
-) -> ChatConversation:
-    conversation = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.id == conversation_id,
-            ChatConversation.business_id == business.id,
-        )
-        .first()
-    )
-    if not conversation:
-        raise NotFoundError("Conversation not found.")
-    return conversation
 
 
 @router.post("/messages", response_model=AssistantMessageOut, status_code=status.HTTP_201_CREATED)
@@ -61,7 +42,7 @@ def send_assistant_message(
     automatically, titled from the first message.
     """
     if payload.conversation_id is not None:
-        conversation = _get_owned_conversation(payload.conversation_id, business, db)
+        conversation = get_owned_conversation(payload.conversation_id, business, db)
     else:
         conversation = ChatConversation(
             business_id=business.id,
