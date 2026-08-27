@@ -51,3 +51,30 @@ class ProductAnalytics(BaseModel):
     highest_profit: list[ProductAnalyticsItem]
     lowest_profit: list[ProductAnalyticsItem]
     slow_moving: list[ProductAnalyticsItem]
+
+
+class BreakdownItem(BaseModel):
+    group: str
+    units_sold: Decimal
+    revenue: Decimal
+    total_cost: Decimal
+    gross_profit: Decimal
+    transaction_count: int
+
+
+class AnalyticsBreakdown(BaseModel):
+    """
+    Batch 6.5: revenue/cost/profit grouped by an optional field
+    (category/customer/payment_method). `has_data` is false when the
+    business has never populated this field on any transaction in range
+    -- distinct from a legitimate "everything fell in one group" result --
+    so a consumer (dashboard chart or the AI assistant) can say "this
+    business doesn't track payment method data" instead of rendering a
+    single misleading bucket.
+    """
+
+    start_date: date
+    end_date: date
+    group_by: str
+    items: list[BreakdownItem]
+    has_data: bool
