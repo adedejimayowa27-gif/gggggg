@@ -1,562 +1,471 @@
 """
-AI assistant service: the tool-calling loop that turns a user's
-natural-language question into a grounded, tool-backed reply.
+AI assistant tool functions.
 
-Runs on Groq (an OpenAI-compatible chat-completions API hosting open
-models like Llama) via the `openai` SDK pointed at Groq's base URL. The
-model is never allowed to answer with a number it invented itself -- the
-system prompt instructs it to call one of the tools below for every
-metric, and every tool call is executed server-side against
-`app.services.ai_tools`, scoped to the single `Business` instance passed
-into `run_assistant` (never a business_id the model could supply itself),
-before the result is handed back to the model. There is no code path here
-that accepts a business_id from the model or the tool-call arguments --
-the tool wrappers below close over `business` instead of taking it as an
-argument, so a call can never leak another business's data even if the
-model hallucinated a different id.
+Plain Python functions the LLM will later be restricted to calling as
+"tools" -- every number they return comes from the same kind of SQL
+aggregation used in app/api/routes/analytics.py (SUM/COUNT in the DB,
+never pulled into Python and summed in a loop, and never estimated by
+the model itself). No AI/LLM code lives in this module; it is purely
+the ground-truth data layer the assistant will be wired up to in a
+later step.
 
-The loop terminates when the model replies with plain text (no more tool
-calls) or after MAX_TOOL_ITERATIONS round trips, whichever comes first,
-so a confused model can't spin forever running up API cost.
+Every function takes `db` and `business` (the same `Business` instance
+returned by `app.api.deps.get_owned_business`) plus already-resolved
+`date` bounds, and scopes its query to that business -- these functions
+never take a business_id or a raw user id, so there is no way for a
+caller to accidentally query another business's data.
+
+Return values are plain JSON-safe dicts (floats and ISO date strings,
+not Decimal/date objects), since these are meant to be handed back to
+an LLM as tool-call results.
 """
-import json
-import logging
-from datetime import date
-from typing import Any, Callable
+import re
+from datetime import date, timedelta
+from decimal import Decimal
 
-import openai
-from openai import OpenAI
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.core.exceptions import AppError, ValidationError
+from app.core.exceptions import ValidationError
 from app.models.business import Business
-from app.services import ai_tools
+from app.models.transaction import Transaction
+from app.services.analytics import DateRangePreset, resolve_date_range
 
-logger = logging.getLogger("app")
-
-MAX_TOOL_ITERATIONS = 6
-
-# A single iteration can itself contain several parallel tool_calls (e.g. the
-# model asks for get_revenue and get_profit in the same round trip), so
-# capping iterations alone doesn't bound total tool executions. This is the
-# hard ceiling on tool calls actually run in one call to `run_assistant`,
-# checked as each call is about to execute -- once hit, no further tool
-# calls are run and the loop is told to wrap up with what it already has.
-MAX_TOOL_CALLS_PER_TURN = 12
-
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-
-# Keep in sync with app.services.ai_tools._VALID_PRODUCT_METRICS -- duplicated
-# here (rather than importing the private name) so the tool JSON schema below
-# is self-contained and easy to read next to the tools it describes.
-_METRICS = ["units_sold", "revenue", "total_cost", "gross_profit", "transaction_count"]
-
-_client: OpenAI | None = None
-
-
-class AssistantUnavailableError(AppError):
-    """Raised when the Groq/LLM API call itself fails (network, timeout,
-    rate limit, auth, or a 5xx from Groq) -- as opposed to ValidationError,
-    which covers bad tool arguments. Kept distinct so the route surfaces a
-    "try again in a moment" message and a 503 rather than a generic 500,
-    and so it's easy for the frontend to distinguish "the assistant is
-    temporarily down" from "something in the request was wrong."
-    """
-
-    status_code = 503
-    code = "assistant_unavailable"
-
-
-def _call_model(client: OpenAI, messages: list[dict], force_no_tools: bool = False):
-    """Single LLM round trip, with the Groq/OpenAI-SDK failure modes turned
-    into an AssistantUnavailableError instead of propagating a raw SDK
-    exception up through the route as an unhandled 500. `force_no_tools` is
-    used for the one-shot "wrap up in words" call after the per-turn tool
-    call cap is hit, so the model can't ask for yet another tool call there.
-    """
-    try:
-        return client.chat.completions.create(
-            model=settings.GROQ_MODEL,
-            max_tokens=1024,
-            messages=messages,
-            tools=None if force_no_tools else TOOLS,
-        )
-    except openai.RateLimitError as exc:
-        logger.warning("Groq rate limit hit: %s", exc)
-        raise AssistantUnavailableError(
-            "The assistant is getting a lot of requests right now. Please try again in a moment."
-        ) from exc
-    except openai.APITimeoutError as exc:
-        logger.warning("Groq request timed out: %s", exc)
-        raise AssistantUnavailableError(
-            "The assistant took too long to respond. Please try again."
-        ) from exc
-    except openai.APIConnectionError as exc:
-        logger.warning("Could not reach Groq API: %s", exc)
-        raise AssistantUnavailableError(
-            "Couldn't reach the assistant service. Please check your connection and try again."
-        ) from exc
-    except openai.AuthenticationError as exc:
-        # Misconfigured API key -- not the user's fault, but also not
-        # something retrying will fix, so this is logged loudly.
-        logger.error("Groq authentication failed -- check GROQ_API_KEY: %s", exc)
-        raise AssistantUnavailableError(
-            "The assistant isn't configured correctly right now. Please try again later."
-        ) from exc
-    except openai.APIStatusError as exc:
-        # Any other 4xx/5xx from Groq we didn't specifically handle above.
-        logger.warning("Groq API returned an error status: %s", exc)
-        raise AssistantUnavailableError(
-            "The assistant service returned an error. Please try again in a moment."
-        ) from exc
-    except openai.APIError as exc:
-        # Catch-all for any other openai-sdk-raised error (malformed
-        # response, SDK-side bug, etc.) so nothing from this call can ever
-        # reach the route as a raw, unhandled exception.
-        logger.exception("Unexpected Groq/OpenAI SDK error: %s", exc)
-        raise AssistantUnavailableError(
-            "The assistant ran into an unexpected error. Please try again."
-        ) from exc
-
-
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        if not settings.GROQ_API_KEY:
-            raise AppError(
-                "AI assistant is not configured (missing GROQ_API_KEY).",
-                code="assistant_not_configured",
-                status_code=503,
-            )
-        _client = OpenAI(api_key=settings.GROQ_API_KEY, base_url=GROQ_BASE_URL)
-    return _client
-
-
-SYSTEM_PROMPT_TEMPLATE = """You are the AI business assistant inside Bizintel, embedded in the \
-dashboard for a single business called "{business_name}". A business owner is asking you \
-questions about their own sales data.
-
-Today's date is {today}.
-
-Rules you must always follow:
-1. You have no built-in knowledge of this business's numbers. Every revenue, cost, profit, \
-or product figure you state MUST come from a tool call you just made in this conversation. \
-Never estimate, round from memory, or invent a number -- if you have not called a tool for it \
-in this turn, you do not know it.
-2. If the user's question involves a date range that isn't already an explicit YYYY-MM-DD pair \
-(e.g. "this month", "last 30 days", "Q1"), call resolve_date_range first and use the dates it \
-returns. Do not compute date ranges yourself.
-3. If a tool call fails or returns an error, do not paper over it -- either try a corrected call \
-(e.g. a fixed date range or product name) or tell the user plainly what went wrong.
-4. If a tool result has "has_data": false, or "transaction_count": 0, or an empty "products" \
-list, that means there is genuinely no data for what you asked -- not that the value is zero in \
-a meaningful sense. Say so plainly (e.g. "There's no recorded sales data for that period") \
-instead of stating a $0 figure as if it were a real result, and never guess, estimate, or infer \
-what the number might have been. Do not speculate about why the data is missing (e.g. do not \
-assume the business was closed) -- just report the absence and, if useful, suggest the user \
-double-check the date range or that data was imported for that period.
-5. You can only see this one business's data. You have no way to answer questions about any \
-other business, and you should say so if asked.
-6. Once you have the data you need, answer in clear, concise natural language -- a short \
-paragraph or a few bullet points. Do not dump raw JSON at the user; translate the numbers into \
-an answer to what they actually asked. Cite the date range you used when it's not obvious.
-7. If the question is not about this business's sales data (e.g. general chit-chat, advice \
-unrelated to the numbers), answer briefly and helpfully without calling a tool.
-"""
-
-
-# OpenAI-compatible "function" tool shape (Groq uses the same format as
-# OpenAI's chat-completions tool calling).
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "resolve_date_range",
-            "description": (
-                "Resolve a natural-language date phrase (e.g. 'last month', 'this week', "
-                "'last 30 days', 'yesterday') into a concrete start_date/end_date pair. "
-                "Call this before any other tool whenever the user's question doesn't already "
-                "give you an explicit YYYY-MM-DD range."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "phrase": {
-                        "type": "string",
-                        "description": "The date phrase to resolve, e.g. 'last month' or 'past 7 days'.",
-                    }
-                },
-                "required": ["phrase"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_revenue",
-            "description": "Total revenue for this business over an inclusive date range.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                },
-                "required": ["start_date", "end_date"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_profit",
-            "description": (
-                "Revenue, total cost, gross profit, and profit margin for this business over "
-                "an inclusive date range."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                },
-                "required": ["start_date", "end_date"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_expenses",
-            "description": "Total cost of goods sold for this business over an inclusive date range.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                },
-                "required": ["start_date", "end_date"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_product_sales",
-            "description": (
-                "Units sold, revenue, cost, and profit for one named product over an inclusive "
-                "date range. The product name is matched case-insensitively but must otherwise "
-                "match exactly."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "product": {"type": "string", "description": "Exact product name."},
-                },
-                "required": ["start_date", "end_date", "product"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_top_products",
-            "description": "The best-performing products over an inclusive date range, ranked by a metric.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "limit": {
-                        "type": "integer",
-                        "description": "How many products to return (1-50). Defaults to 5.",
-                    },
-                    "metric": {"type": "string", "enum": _METRICS, "description": "Defaults to 'revenue'."},
-                },
-                "required": ["start_date", "end_date"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_slow_products",
-            "description": (
-                "The worst-performing / slowest-moving products over an inclusive date range, "
-                "ranked by a metric."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "limit": {
-                        "type": "integer",
-                        "description": "How many products to return (1-50). Defaults to 5.",
-                    },
-                    "metric": {"type": "string", "enum": _METRICS, "description": "Defaults to 'units_sold'."},
-                },
-                "required": ["start_date", "end_date"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "compare_periods",
-            "description": (
-                "Compare revenue/cost/profit between two date ranges, e.g. this month vs last "
-                "month. period_a is the baseline; period_b is compared against it."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "period_a_start": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "period_a_end": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "period_b_start": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                    "period_b_end": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
-                },
-                "required": ["period_a_start", "period_a_end", "period_b_start", "period_b_end"],
-            },
-        },
-    },
-]
-
-
-# ---------------------------------------------------------------------------
-# Tool handlers -- each closes over nothing but (db, business); business
-# always comes from the server-resolved Business instance, never from the
-# model's tool-call arguments, so there is no argument name a model could
-# supply to reach another business's rows.
-# ---------------------------------------------------------------------------
-
-
-def _parse_date(value: Any, field: str) -> date:
-    if not isinstance(value, str):
-        raise ValidationError(f"{field} must be a YYYY-MM-DD string.")
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        raise ValidationError(f"{field} must be a valid YYYY-MM-DD date, got {value!r}.")
-
-
-def _handle_resolve_date_range(db: Session, business: Business, **kwargs) -> dict:
-    phrase = kwargs.get("phrase")
-    if not isinstance(phrase, str) or not phrase.strip():
-        raise ValidationError("phrase is required.")
-    start, end = ai_tools.resolve_natural_date_range(phrase)
-    return {"start_date": start.isoformat(), "end_date": end.isoformat()}
-
-
-def _handle_get_revenue(db: Session, business: Business, **kwargs) -> dict:
-    return ai_tools.get_revenue(
-        db, business,
-        _parse_date(kwargs.get("start_date"), "start_date"),
-        _parse_date(kwargs.get("end_date"), "end_date"),
-    )
-
-
-def _handle_get_profit(db: Session, business: Business, **kwargs) -> dict:
-    return ai_tools.get_profit(
-        db, business,
-        _parse_date(kwargs.get("start_date"), "start_date"),
-        _parse_date(kwargs.get("end_date"), "end_date"),
-    )
-
-
-def _handle_get_expenses(db: Session, business: Business, **kwargs) -> dict:
-    return ai_tools.get_expenses(
-        db, business,
-        _parse_date(kwargs.get("start_date"), "start_date"),
-        _parse_date(kwargs.get("end_date"), "end_date"),
-    )
-
-
-def _handle_get_product_sales(db: Session, business: Business, **kwargs) -> dict:
-    product = kwargs.get("product")
-    if not isinstance(product, str) or not product.strip():
-        raise ValidationError("product is required.")
-    return ai_tools.get_product_sales(
-        db, business,
-        _parse_date(kwargs.get("start_date"), "start_date"),
-        _parse_date(kwargs.get("end_date"), "end_date"),
-        product,
-    )
-
-
-def _handle_get_top_products(db: Session, business: Business, **kwargs) -> dict:
-    return ai_tools.get_top_products(
-        db, business,
-        _parse_date(kwargs.get("start_date"), "start_date"),
-        _parse_date(kwargs.get("end_date"), "end_date"),
-        limit=int(kwargs.get("limit") or 5),
-        metric=kwargs.get("metric") or "revenue",
-    )
-
-
-def _handle_get_slow_products(db: Session, business: Business, **kwargs) -> dict:
-    return ai_tools.get_slow_products(
-        db, business,
-        _parse_date(kwargs.get("start_date"), "start_date"),
-        _parse_date(kwargs.get("end_date"), "end_date"),
-        limit=int(kwargs.get("limit") or 5),
-        metric=kwargs.get("metric") or "units_sold",
-    )
-
-
-def _handle_compare_periods(db: Session, business: Business, **kwargs) -> dict:
-    return ai_tools.compare_periods(
-        db, business,
-        _parse_date(kwargs.get("period_a_start"), "period_a_start"),
-        _parse_date(kwargs.get("period_a_end"), "period_a_end"),
-        _parse_date(kwargs.get("period_b_start"), "period_b_start"),
-        _parse_date(kwargs.get("period_b_end"), "period_b_end"),
-    )
-
-
-TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
-    "resolve_date_range": _handle_resolve_date_range,
-    "get_revenue": _handle_get_revenue,
-    "get_profit": _handle_get_profit,
-    "get_expenses": _handle_get_expenses,
-    "get_product_sales": _handle_get_product_sales,
-    "get_top_products": _handle_get_top_products,
-    "get_slow_products": _handle_get_slow_products,
-    "compare_periods": _handle_compare_periods,
+_VALID_PRODUCT_METRICS = {
+    "units_sold",
+    "revenue",
+    "total_cost",
+    "gross_profit",
+    "transaction_count",
 }
 
 
-def _execute_tool(db: Session, business: Business, name: str, arguments_json: str) -> dict:
-    """Run one tool call and return a JSON-safe result dict -- always
-    including either the tool's real output or an "error" key, never
-    raising, so the loop can always feed something back to the model
-    rather than crashing the whole request over one bad tool call."""
-    handler = TOOL_HANDLERS.get(name)
-    if handler is None:
-        return {"error": f"Unknown tool: {name!r}."}
-
-    try:
-        tool_input = json.loads(arguments_json) if arguments_json else {}
-        if not isinstance(tool_input, dict):
-            raise ValueError("arguments must be a JSON object")
-    except (json.JSONDecodeError, ValueError) as exc:
-        return {"error": f"Could not parse arguments for {name}: {exc}"}
-
-    try:
-        return handler(db, business, **tool_input)
-    except ValidationError as exc:
-        return {"error": exc.message}
-    except TypeError as exc:
-        # Malformed/missing arguments from the model land here.
-        return {"error": f"Invalid arguments for {name}: {exc}"}
-    except Exception:
-        logger.exception("Tool %r failed for business %s", name, business.id)
-        return {"error": "Internal error while running this tool."}
-
-
 # ---------------------------------------------------------------------------
-# The loop itself
+# Small internal helpers
 # ---------------------------------------------------------------------------
 
 
-def run_assistant(db: Session, business: Business, history: list[dict]) -> str:
-    """
-    Run the tool-calling loop and return the assistant's final natural-
-    language reply as plain text.
+def _validate_range(start_date: date, end_date: date) -> None:
+    if start_date > end_date:
+        raise ValidationError("start_date must not be after end_date.")
 
-    `history` is the full conversation so far as a chronological list of
-    {"role": "user"|"assistant", "content": str} dicts, ending with the
-    newest user message. The caller (the assistant route) is responsible
-    for persisting both the user message and this function's return value
-    as ChatMessage rows -- this function only talks to the model and to
-    the Batch 5.1 tool functions, it never writes conversation rows itself.
-    """
-    client = _get_client()
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        business_name=business.name, today=date.today().isoformat()
-    )
 
-    messages: list[dict] = [{"role": "system", "content": system_prompt}]
-    messages.extend({"role": h["role"], "content": h["content"]} for h in history)
+def _validate_limit(limit: int) -> None:
+    if limit < 1 or limit > 50:
+        raise ValidationError("limit must be between 1 and 50.")
 
-    total_tool_calls = 0
-    call_limit_hit = False
 
-    for _ in range(MAX_TOOL_ITERATIONS):
-        response = _call_model(client, messages)
-
-        message = response.choices[0].message
-        tool_calls = message.tool_calls or []
-
-        if not tool_calls:
-            text = (message.content or "").strip()
-            return text or "I wasn't able to generate a response to that."
-
-        # Echo the assistant's tool-call turn back, then answer every
-        # tool_call with a matching "tool" message before the next round
-        # trip -- the API requires one tool result per tool_call, so even
-        # once the per-turn cap is hit we still have to give each call_id a
-        # result (an "error" one) rather than silently dropping it.
-        messages.append(
-            {
-                "role": "assistant",
-                "content": message.content,
-                "tool_calls": [
-                    {
-                        "id": call.id,
-                        "type": "function",
-                        "function": {"name": call.function.name, "arguments": call.function.arguments},
-                    }
-                    for call in tool_calls
-                ],
-            }
+def _validate_metric(metric: str) -> None:
+    if metric not in _VALID_PRODUCT_METRICS:
+        raise ValidationError(
+            f"Unsupported metric: {metric!r}. Must be one of {sorted(_VALID_PRODUCT_METRICS)}."
         )
 
-        for call in tool_calls:
-            if total_tool_calls >= MAX_TOOL_CALLS_PER_TURN:
-                call_limit_hit = True
-                result = {
-                    "error": (
-                        "Tool call limit reached for this turn. Stop calling tools and answer "
-                        "using only the data already gathered, noting anything you couldn't check."
-                    )
-                }
-            else:
-                result = _execute_tool(db, business, call.function.name, call.function.arguments)
-                total_tool_calls += 1
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "content": json.dumps(result),
-                }
-            )
 
-        if call_limit_hit:
-            logger.warning(
-                "Assistant tool loop hit MAX_TOOL_CALLS_PER_TURN (%s) for business %s",
-                MAX_TOOL_CALLS_PER_TURN,
-                business.id,
-            )
-            # Give the model one more turn to wrap up in words using
-            # whatever it already has, rather than cutting it off cold.
-            try:
-                response = _call_model(client, messages, force_no_tools=True)
-                text = (response.choices[0].message.content or "").strip()
-                if text:
-                    return text
-            except AssistantUnavailableError:
-                pass
-            return (
-                "That question needed more lookups than I'm allowed to run at once. "
-                "Could you split it into a couple of narrower questions (e.g. one metric or "
-                "date range at a time)?"
-            )
-
-    logger.warning("Assistant tool loop hit MAX_TOOL_ITERATIONS for business %s", business.id)
+def _period_filters(business: Business, start_date: date, end_date: date):
     return (
-        "I wasn't able to finish gathering the data needed to answer that. "
-        "Could you try a narrower or more specific question (e.g. a shorter date range)?"
+        Transaction.business_id == business.id,
+        Transaction.date >= start_date,
+        Transaction.date <= end_date,
     )
+
+
+def _to_float(value, ndigits: int = 2) -> float:
+    return round(float(value), ndigits)
+
+
+# ---------------------------------------------------------------------------
+# Ground-truth data functions
+# ---------------------------------------------------------------------------
+
+
+def get_revenue(db: Session, business: Business, start_date: date, end_date: date) -> dict:
+    """Total revenue (quantity * selling_price) for the business in [start_date, end_date].
+
+    Always includes `transaction_count` and `has_data` alongside the number
+    itself -- a bare `"revenue": 0.0` is ambiguous (a genuinely flat period
+    vs. no transactions imported for that range at all), and the model is
+    told in the system prompt to check `has_data` and say so explicitly
+    rather than guess which case it's looking at.
+    """
+    _validate_range(start_date, end_date)
+
+    revenue_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.selling_price), 0
+    )
+    count_expr = func.count(Transaction.id)
+    row = (
+        db.query(revenue_expr.label("revenue"), count_expr.label("transaction_count"))
+        .filter(*_period_filters(business, start_date, end_date))
+        .one()
+    )
+
+    result = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "revenue": _to_float(row.revenue),
+        "transaction_count": row.transaction_count,
+        "has_data": row.transaction_count > 0,
+    }
+    if row.transaction_count == 0:
+        result["note"] = "No transactions found for this business in this date range."
+    return result
+
+
+def get_profit(db: Session, business: Business, start_date: date, end_date: date) -> dict:
+    """Revenue, total cost, gross profit and profit margin for [start_date, end_date].
+
+    Includes `transaction_count`/`has_data`/`note` for the same
+    insufficient-data reason as `get_revenue` -- see that function's
+    docstring.
+    """
+    _validate_range(start_date, end_date)
+
+    revenue_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.selling_price), 0
+    )
+    cost_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.cost_price), 0
+    )
+    count_expr = func.count(Transaction.id)
+
+    row = (
+        db.query(
+            revenue_expr.label("revenue"),
+            cost_expr.label("total_cost"),
+            count_expr.label("transaction_count"),
+        )
+        .filter(*_period_filters(business, start_date, end_date))
+        .one()
+    )
+
+    revenue = Decimal(row.revenue)
+    total_cost = Decimal(row.total_cost)
+    gross_profit = revenue - total_cost
+    profit_margin = (gross_profit / revenue * 100) if revenue > 0 else Decimal(0)
+
+    result = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "revenue": _to_float(revenue),
+        "total_cost": _to_float(total_cost),
+        "gross_profit": _to_float(gross_profit),
+        "profit_margin": _to_float(profit_margin),
+        "transaction_count": row.transaction_count,
+        "has_data": row.transaction_count > 0,
+    }
+    if row.transaction_count == 0:
+        result["note"] = "No transactions found for this business in this date range."
+    return result
+
+
+def get_expenses(db: Session, business: Business, start_date: date, end_date: date) -> dict:
+    """Total cost of goods sold (quantity * cost_price) for [start_date, end_date].
+
+    Includes `transaction_count`/`has_data`/`note` for the same
+    insufficient-data reason as `get_revenue` -- see that function's
+    docstring.
+    """
+    _validate_range(start_date, end_date)
+
+    cost_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.cost_price), 0
+    )
+    count_expr = func.count(Transaction.id)
+    row = (
+        db.query(cost_expr.label("total_cost"), count_expr.label("transaction_count"))
+        .filter(*_period_filters(business, start_date, end_date))
+        .one()
+    )
+
+    result = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "total_cost": _to_float(row.total_cost),
+        "transaction_count": row.transaction_count,
+        "has_data": row.transaction_count > 0,
+    }
+    if row.transaction_count == 0:
+        result["note"] = "No transactions found for this business in this date range."
+    return result
+
+
+def get_product_sales(
+    db: Session,
+    business: Business,
+    start_date: date,
+    end_date: date,
+    product: str,
+) -> dict:
+    """Units, revenue, cost and profit for a single named product (case-insensitive exact match)."""
+    _validate_range(start_date, end_date)
+
+    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
+    revenue_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.selling_price), 0
+    )
+    cost_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.cost_price), 0
+    )
+    count_expr = func.count(Transaction.id)
+
+    row = (
+        db.query(
+            units_expr.label("units_sold"),
+            revenue_expr.label("revenue"),
+            cost_expr.label("total_cost"),
+            count_expr.label("transaction_count"),
+        )
+        .filter(
+            *_period_filters(business, start_date, end_date),
+            func.lower(Transaction.product) == product.strip().lower(),
+        )
+        .one()
+    )
+
+    revenue = Decimal(row.revenue)
+    total_cost = Decimal(row.total_cost)
+
+    result = {
+        "product": product,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "units_sold": _to_float(row.units_sold, ndigits=3),
+        "revenue": _to_float(revenue),
+        "total_cost": _to_float(total_cost),
+        "gross_profit": _to_float(revenue - total_cost),
+        "transaction_count": row.transaction_count,
+        "has_data": row.transaction_count > 0,
+    }
+    if row.transaction_count == 0:
+        result["note"] = (
+            f"No transactions found for product {product!r} in this date range. "
+            "This may mean the product name doesn't match exactly, or it simply wasn't sold then."
+        )
+    return result
+
+
+def _product_breakdown(db: Session, business: Business, start_date: date, end_date: date) -> list[dict]:
+    """Per-product totals for [start_date, end_date], one SQL GROUP BY query. Internal helper."""
+    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
+    revenue_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.selling_price), 0
+    )
+    cost_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.cost_price), 0
+    )
+    count_expr = func.count(Transaction.id)
+
+    rows = (
+        db.query(
+            Transaction.product.label("product"),
+            units_expr.label("units_sold"),
+            revenue_expr.label("revenue"),
+            cost_expr.label("total_cost"),
+            count_expr.label("transaction_count"),
+        )
+        .filter(*_period_filters(business, start_date, end_date))
+        .group_by(Transaction.product)
+        .all()
+    )
+
+    items = []
+    for row in rows:
+        revenue = Decimal(row.revenue)
+        total_cost = Decimal(row.total_cost)
+        items.append(
+            {
+                "product": row.product,
+                "units_sold": _to_float(row.units_sold, ndigits=3),
+                "revenue": _to_float(revenue),
+                "total_cost": _to_float(total_cost),
+                "gross_profit": _to_float(revenue - total_cost),
+                "transaction_count": row.transaction_count,
+            }
+        )
+    return items
+
+
+def get_top_products(
+    db: Session,
+    business: Business,
+    start_date: date,
+    end_date: date,
+    limit: int = 5,
+    metric: str = "revenue",
+) -> dict:
+    """Top `limit` products by `metric` (units_sold/revenue/total_cost/gross_profit/transaction_count)."""
+    _validate_range(start_date, end_date)
+    _validate_limit(limit)
+    _validate_metric(metric)
+
+    items = _product_breakdown(db, business, start_date, end_date)
+    ranked = sorted(items, key=lambda item: item[metric], reverse=True)[:limit]
+
+    result = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "metric": metric,
+        "products": ranked,
+        "has_data": len(ranked) > 0,
+    }
+    if not ranked:
+        result["note"] = "No transactions found for this business in this date range."
+    return result
+
+
+def get_slow_products(
+    db: Session,
+    business: Business,
+    start_date: date,
+    end_date: date,
+    limit: int = 5,
+    metric: str = "units_sold",
+) -> dict:
+    """Bottom `limit` products by `metric` -- the slowest/least profitable movers."""
+    _validate_range(start_date, end_date)
+    _validate_limit(limit)
+    _validate_metric(metric)
+
+    items = _product_breakdown(db, business, start_date, end_date)
+    ranked = sorted(items, key=lambda item: item[metric])[:limit]
+
+    result = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "metric": metric,
+        "products": ranked,
+        "has_data": len(ranked) > 0,
+    }
+    if not ranked:
+        result["note"] = "No transactions found for this business in this date range."
+    return result
+
+
+def compare_periods(
+    db: Session,
+    business: Business,
+    period_a_start: date,
+    period_a_end: date,
+    period_b_start: date,
+    period_b_end: date,
+) -> dict:
+    """
+    Compare revenue/cost/profit between two periods (e.g. "this month" vs
+    "last month"). period_a is the baseline; period_b is compared against it.
+    """
+    period_a = get_profit(db, business, period_a_start, period_a_end)
+    period_b = get_profit(db, business, period_b_start, period_b_end)
+
+    def _pct_change(old: float, new: float) -> float | None:
+        if old == 0:
+            return None
+        return round((new - old) / abs(old) * 100, 2)
+
+    return {
+        "period_a": period_a,
+        "period_b": period_b,
+        "revenue_change_pct": _pct_change(period_a["revenue"], period_b["revenue"]),
+        "gross_profit_change_pct": _pct_change(
+            period_a["gross_profit"], period_b["gross_profit"]
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Natural-language date-range resolution
+# ---------------------------------------------------------------------------
+
+_LAST_N_DAYS_RE = re.compile(r"^(?:last|past)\s+(\d+)\s+days?$")
+_LAST_N_WEEKS_RE = re.compile(r"^(?:last|past)\s+(\d+)\s+weeks?$")
+_LAST_N_MONTHS_RE = re.compile(r"^(?:last|past)\s+(\d+)\s+months?$")
+
+
+def _month_bounds(year: int, month: int) -> tuple[date, date]:
+    start = date(year, month, 1)
+    if month == 12:
+        next_month_start = date(year + 1, 1, 1)
+    else:
+        next_month_start = date(year, month + 1, 1)
+    return start, next_month_start - timedelta(days=1)
+
+
+def _shift_months(anchor: date, months_back: int) -> date:
+    """Return the first-of-month date `months_back` months before anchor's month."""
+    total_months = anchor.year * 12 + (anchor.month - 1) - months_back
+    year, month = divmod(total_months, 12)
+    return date(year, month + 1, 1)
+
+
+def resolve_natural_date_range(phrase: str, today: date | None = None) -> tuple[date, date]:
+    """
+    Turn a natural-language date phrase into a concrete inclusive
+    (start_date, end_date) pair, extending `resolve_date_range` (which only
+    understands the fixed today/7d/30d/90d/custom presets) with the looser
+    phrasing an LLM is likely to pass along from a user's question.
+
+    Supported phrases (case-insensitive): "today", "yesterday",
+    "this week", "last week", "this month", "last month", "this year",
+    "last year", "last N days", "last N weeks", "last N months" (and
+    "past" as a synonym for "last").
+
+    Raises ValidationError if the phrase isn't recognized -- callers should
+    surface that back to the LLM/user rather than guessing a range.
+    """
+    reference_today = today or date.today()
+    normalized = phrase.strip().lower()
+
+    if normalized == "today":
+        return resolve_date_range(DateRangePreset.TODAY, today=reference_today)
+
+    if normalized == "yesterday":
+        yesterday = reference_today - timedelta(days=1)
+        return yesterday, yesterday
+
+    if normalized == "this week":
+        start = reference_today - timedelta(days=reference_today.weekday())
+        return start, reference_today
+
+    if normalized == "last week":
+        start_of_this_week = reference_today - timedelta(days=reference_today.weekday())
+        end_of_last_week = start_of_this_week - timedelta(days=1)
+        start_of_last_week = end_of_last_week - timedelta(days=6)
+        return start_of_last_week, end_of_last_week
+
+    if normalized == "this month":
+        return reference_today.replace(day=1), reference_today
+
+    if normalized == "last month":
+        first_of_this_month = reference_today.replace(day=1)
+        last_day_of_prev_month = first_of_this_month - timedelta(days=1)
+        return _month_bounds(last_day_of_prev_month.year, last_day_of_prev_month.month)
+
+    if normalized == "this year":
+        return reference_today.replace(month=1, day=1), reference_today
+
+    if normalized == "last year":
+        return date(reference_today.year - 1, 1, 1), date(reference_today.year - 1, 12, 31)
+
+    match = _LAST_N_DAYS_RE.match(normalized)
+    if match:
+        n = int(match.group(1))
+        if n < 1:
+            raise ValidationError("Number of days must be at least 1.")
+        return reference_today - timedelta(days=n - 1), reference_today
+
+    match = _LAST_N_WEEKS_RE.match(normalized)
+    if match:
+        n = int(match.group(1))
+        if n < 1:
+            raise ValidationError("Number of weeks must be at least 1.")
+        return reference_today - timedelta(weeks=n) + timedelta(days=1), reference_today
+
+    match = _LAST_N_MONTHS_RE.match(normalized)
+    if match:
+        n = int(match.group(1))
+        if n < 1:
+            raise ValidationError("Number of months must be at least 1.")
+        start = _shift_months(reference_today, n)
+        return start, reference_today
+
+    raise ValidationError(f"Could not resolve date range phrase: {phrase!r}")
