@@ -19,13 +19,21 @@ from app.db.session import get_db
 from app.models.business import Business
 from app.models.transaction import Transaction
 from app.schemas.analytics import (
+    AnalyticsBreakdown,
     AnalyticsSummary,
     AnalyticsTimeseries,
+    BreakdownItem,
     ProductAnalytics,
     ProductAnalyticsItem,
     TimeseriesPoint,
 )
-from app.services.analytics import DateRangePreset, Granularity, resolve_date_range
+from app.services.analytics import (
+    BREAKDOWN_UNSET_LABELS,
+    BreakdownField,
+    DateRangePreset,
+    Granularity,
+    resolve_date_range,
+)
 
 router = APIRouter(prefix="/businesses/{business_id}/analytics", tags=["analytics"])
 
@@ -212,4 +220,85 @@ def get_analytics_products(
         highest_profit=highest_profit,
         lowest_profit=lowest_profit,
         slow_moving=slow_moving,
+    )
+
+
+# Batch 6.5: category/customer/payment_method are optional (Batch 6.1),
+# so this is a new, additive endpoint rather than a change to the three
+# above -- a business that has never populated these fields gets
+# has_data=False here and every existing endpoint's response shape is
+# completely unaffected either way.
+_GROUP_BY_COLUMNS = {
+    BreakdownField.CATEGORY: Transaction.category,
+    BreakdownField.CUSTOMER: Transaction.customer,
+    BreakdownField.PAYMENT_METHOD: Transaction.payment_method,
+}
+
+
+@router.get("/breakdown", response_model=AnalyticsBreakdown)
+def get_analytics_breakdown(
+    group_by: BreakdownField = Query(...),
+    range: DateRangePreset = Query(default=DateRangePreset.LAST_30D),
+    start_date: date_type | None = Query(default=None),
+    end_date: date_type | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
+    group_column = _GROUP_BY_COLUMNS[group_by]
+
+    units_expr = func.coalesce(func.sum(Transaction.quantity), 0)
+    revenue_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.selling_price), 0
+    )
+    cost_expr = func.coalesce(
+        func.sum(Transaction.quantity * Transaction.cost_price), 0
+    )
+    count_expr = func.count(Transaction.id)
+
+    rows = (
+        db.query(
+            group_column.label("group_value"),
+            units_expr.label("units_sold"),
+            revenue_expr.label("revenue"),
+            cost_expr.label("total_cost"),
+            count_expr.label("transaction_count"),
+        )
+        .filter(
+            Transaction.business_id == business.id,
+            Transaction.date >= resolved_start,
+            Transaction.date <= resolved_end,
+        )
+        .group_by(group_column)
+        .order_by(revenue_expr.desc())
+        .limit(limit)
+        .all()
+    )
+
+    # A non-null group_value on at least one row means this field is
+    # genuinely tracked -- as opposed to every row being NULL, which means
+    # the business has simply never populated it (see AnalyticsBreakdown's
+    # docstring for why this distinction matters to the caller).
+    has_data = any(row.group_value is not None for row in rows)
+    unset_label = BREAKDOWN_UNSET_LABELS[group_by]
+
+    items = [
+        BreakdownItem(
+            group=row.group_value if row.group_value else unset_label,
+            units_sold=Decimal(row.units_sold),
+            revenue=Decimal(row.revenue),
+            total_cost=Decimal(row.total_cost),
+            gross_profit=Decimal(row.revenue) - Decimal(row.total_cost),
+            transaction_count=row.transaction_count,
+        )
+        for row in rows
+    ]
+
+    return AnalyticsBreakdown(
+        start_date=resolved_start,
+        end_date=resolved_end,
+        group_by=group_by.value,
+        items=items,
+        has_data=has_data,
     )
