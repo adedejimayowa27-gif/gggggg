@@ -17,8 +17,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_owned_business
-from app.core.exceptions import NotFoundError
+from app.api.deps import get_current_user, get_owned_business, get_owned_conversation
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.chat_conversation import ChatConversation
@@ -32,22 +31,6 @@ from app.schemas.chat import (
 )
 
 router = APIRouter(prefix="/businesses/{business_id}/conversations", tags=["chat"])
-
-
-def _get_owned_conversation(
-    conversation_id: uuid.UUID, business: Business, db: Session
-) -> ChatConversation:
-    conversation = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.id == conversation_id,
-            ChatConversation.business_id == business.id,
-        )
-        .first()
-    )
-    if not conversation:
-        raise NotFoundError("Conversation not found.")
-    return conversation
 
 
 @router.post("", response_model=ChatConversationOut, status_code=status.HTTP_201_CREATED)
@@ -93,7 +76,7 @@ def create_message(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    conversation = _get_owned_conversation(conversation_id, business, db)
+    conversation = get_owned_conversation(conversation_id, business, db)
 
     message = ChatMessage(
         conversation_id=conversation.id,
@@ -112,7 +95,7 @@ def list_messages(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    conversation = _get_owned_conversation(conversation_id, business, db)
+    conversation = get_owned_conversation(conversation_id, business, db)
 
     messages = (
         db.query(ChatMessage)
