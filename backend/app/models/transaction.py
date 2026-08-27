@@ -41,6 +41,14 @@ class Transaction(Base):
     selling_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     cost_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
 
+    # Batch 6.1: optional fields completing the 8-field standard schema.
+    # All three are nullable so existing/simple transaction files (which
+    # only ever mapped the first 5 fields) continue to import and read
+    # exactly as before -- nothing downstream should assume these are set.
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    customer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    payment_method: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
