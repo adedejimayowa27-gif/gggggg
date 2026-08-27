@@ -157,21 +157,28 @@ instead of stating a zero figure as if it were a real result, and never guess, e
 what the number might have been. Do not speculate about why the data is missing (e.g. do not \
 assume the business was closed) -- just report the absence and, if useful, suggest the user \
 double-check the date range or that data was imported for that period.
-5. You can only see this one business's data. You have no way to answer questions about any \
+5. category, customer, and payment_method are optional fields -- many businesses never record \
+them. If get_breakdown returns "has_data": false, that means this business has never tagged any \
+transaction with the field you asked about, not that everything falls in one real group -- tell \
+the user plainly that this business doesn't track that (e.g. "This business doesn't have \
+payment method data recorded") instead of presenting the combined total as a meaningful \
+breakdown. Use get_breakdown for questions like "revenue by category" or "which payment method \
+is most common"; use get_top_products/get_slow_products for per-product ranking instead.
+6. You can only see this one business's data. You have no way to answer questions about any \
 other business, and you should say so if asked.
-6. All monetary figures from tool results are in Nigerian Naira. Always write amounts with the \
+7. All monetary figures from tool results are in Nigerian Naira. Always write amounts with the \
 ₦ symbol and comma thousands separators (e.g. ₦1,234,567 or ₦45,000.50) -- never $, USD, or any \
 other currency, and never convert the number into another currency.
-7. Write your reply as plain conversational text only -- this is rendered in a plain chat \
+8. Write your reply as plain conversational text only -- this is rendered in a plain chat \
 bubble with no markdown support. Do not use asterisks, underscores, backticks, "#" headers, or \
 any other markdown/formatting syntax (no **bold**, no _italics_, no bullet "*"/"-" lists). If you \
 want to list a few items, write them as a short sentence or number them inline in plain prose \
 (e.g. "1. ..., 2. ..., 3. ...") instead of using markdown list markers.
-8. Once you have the data you need, answer in clear, concise natural language -- a short \
+9. Once you have the data you need, answer in clear, concise natural language -- a short \
 paragraph or a few short numbered points as plain text. Do not dump raw JSON at the user; \
 translate the numbers into an answer to what they actually asked. Cite the date range you used \
 when it's not obvious.
-9. If the question is not about this business's sales data (e.g. general chit-chat, advice \
+10. If the question is not about this business's sales data (e.g. general chit-chat, advice \
 unrelated to the numbers), answer briefly and helpfully without calling a tool.
 """
 
@@ -332,6 +339,37 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_breakdown",
+            "description": (
+                "Revenue/cost/profit grouped by category, customer, or payment method over an "
+                "inclusive date range. These three fields are optional -- a business may never "
+                "have recorded one of them, in which case this returns has_data: false with "
+                "everything rolled into one combined total rather than a real breakdown. Use "
+                "this for questions like 'revenue by category' or 'which payment method do "
+                "customers use most', not for per-product ranking (use get_top_products/"
+                "get_slow_products for that instead)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "group_by": {
+                        "type": "string",
+                        "enum": ["category", "customer", "payment_method"],
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "How many groups to return (1-50). Defaults to 10.",
+                    },
+                },
+                "required": ["start_date", "end_date", "group_by"],
+            },
+        },
+    },
 ]
 
 
@@ -426,6 +464,19 @@ def _handle_compare_periods(db: Session, business: Business, **kwargs) -> dict:
     )
 
 
+def _handle_get_breakdown(db: Session, business: Business, **kwargs) -> dict:
+    group_by = kwargs.get("group_by")
+    if not isinstance(group_by, str) or not group_by.strip():
+        raise ValidationError("group_by is required.")
+    return ai_tools.get_breakdown(
+        db, business,
+        _parse_date(kwargs.get("start_date"), "start_date"),
+        _parse_date(kwargs.get("end_date"), "end_date"),
+        group_by=group_by,
+        limit=int(kwargs.get("limit") or 10),
+    )
+
+
 TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
     "resolve_date_range": _handle_resolve_date_range,
     "get_revenue": _handle_get_revenue,
@@ -435,6 +486,7 @@ TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
     "get_top_products": _handle_get_top_products,
     "get_slow_products": _handle_get_slow_products,
     "compare_periods": _handle_compare_periods,
+    "get_breakdown": _handle_get_breakdown,
 }
 
 
