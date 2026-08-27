@@ -3,8 +3,9 @@ Analytics service.
 
 Shared logic for turning a `range` query param (today/7d/30d/90d/custom)
 into concrete (start_date, end_date) bounds. Every analytics endpoint
-(summary, timeseries, products) resolves its date range through here so
-the "what does 7d mean" definition lives in exactly one place.
+(summary, timeseries, products, breakdown) resolves its date range
+through here so the "what does 7d mean" definition lives in exactly one
+place.
 """
 from datetime import date, timedelta
 from enum import Enum
@@ -24,6 +25,32 @@ class Granularity(str, Enum):
     DAY = "day"
     WEEK = "week"
     MONTH = "month"
+
+
+class BreakdownField(str, Enum):
+    """
+    The optional transaction fields (Batch 6.1) a business may or may not
+    actually populate. Kept as its own enum -- rather than a bare string
+    query param -- so FastAPI validates it and so future consumers
+    (forecasting, alerts) have one canonical list of "dimensions this
+    business's data can be sliced by" to import instead of re-typing field
+    names as strings.
+    """
+
+    CATEGORY = "category"
+    CUSTOMER = "customer"
+    PAYMENT_METHOD = "payment_method"
+
+
+# Human-readable placeholder shown in a breakdown for transactions where
+# the given optional field was never populated -- distinct per field so
+# "Uncategorized" (a category concept) doesn't show up next to a payment
+# method by mistake.
+BREAKDOWN_UNSET_LABELS: dict[BreakdownField, str] = {
+    BreakdownField.CATEGORY: "Uncategorized",
+    BreakdownField.CUSTOMER: "Unspecified customer",
+    BreakdownField.PAYMENT_METHOD: "Unspecified payment method",
+}
 
 
 def resolve_date_range(
