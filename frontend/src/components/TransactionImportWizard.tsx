@@ -20,9 +20,12 @@ const FIELD_LABELS: Record<StandardField, string> = {
   quantity: "Quantity",
   selling_price: "Selling Price",
   cost_price: "Cost Price",
+  category: "Category",
+  customer: "Customer",
+  payment_method: "Payment Method",
 };
 
-const OPTIONAL_FIELDS: StandardField[] = ["cost_price"];
+const OPTIONAL_FIELDS: StandardField[] = ["cost_price", "category", "customer", "payment_method"];
 
 interface Props {
   businessId: string;
