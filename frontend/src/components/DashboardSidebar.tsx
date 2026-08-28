@@ -12,11 +12,11 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Overview", href: "/dashboard", enabled: true },
-  { label: "Transactions", href: "/dashboard/transactions", enabled: false },
-  { label: "Products", href: "/dashboard/products", enabled: false },
-  { label: "Analytics", href: "/dashboard/analytics", enabled: false },
-  { label: "Simulator", href: "/dashboard/simulator", enabled: false },
-  { label: "AI Assistant", href: "/dashboard/ai-assistant", enabled: false },
+  { label: "Transactions", href: "/dashboard/transactions", enabled: true },
+  { label: "Products", href: "/dashboard/products", enabled: true },
+  { label: "Analytics", href: "/dashboard/analytics", enabled: true },
+  { label: "Simulator", href: "/dashboard/simulator", enabled: true },
+  { label: "AI Assistant", href: "/dashboard/ai-assistant", enabled: true },
   { label: "Settings", href: "/dashboard/settings", enabled: false },
 ];
 
