@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import ValidationError
 from app.models.business import Business
 from app.models.transaction import Transaction
+from app.models.simulation import Simulation
 from app.services.analytics import (
     BREAKDOWN_UNSET_LABELS,
     BreakdownField,
@@ -543,3 +544,68 @@ def resolve_natural_date_range(phrase: str, today: date | None = None) -> tuple[
         return start, reference_today
 
     raise ValidationError(f"Could not resolve date range phrase: {phrase!r}")
+
+
+# ---------------------------------------------------------------------------
+# Simulator tools (Step 7). These never compute anything themselves --
+# they only fetch already-computed Simulation rows (see
+# app.services.scenario_engine, which does the actual math when a
+# simulation is created). The assistant explains numbers the engine
+# already produced; it never re-derives or estimates them.
+# ---------------------------------------------------------------------------
+
+
+def list_simulations(db: Session, business: Business, limit: int = 20) -> dict:
+    """List this business's saved simulations, most recent first."""
+    _validate_limit(limit)
+    rows = (
+        db.query(Simulation)
+        .filter(Simulation.business_id == business.id)
+        .order_by(Simulation.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "simulations": [
+            {
+                "name": s.name,
+                "scenario_type": s.scenario_type,
+                "parameters": s.parameters,
+                "baseline_start_date": s.baseline_start_date.isoformat(),
+                "baseline_end_date": s.baseline_end_date.isoformat(),
+                "created_at": s.created_at.isoformat(),
+            }
+            for s in rows
+        ],
+        "has_data": len(rows) > 0,
+    }
+
+
+def get_simulation_by_name(db: Session, business: Business, name: str) -> dict:
+    """
+    Fetch one saved simulation's full assumptions and results by name
+    (case-insensitive exact match). Returns has_data: false with a note
+    if no simulation with that name exists for this business -- the
+    model must say so rather than guessing at numbers.
+    """
+    sim = (
+        db.query(Simulation)
+        .filter(Simulation.business_id == business.id, func.lower(Simulation.name) == name.strip().lower())
+        .order_by(Simulation.created_at.desc())
+        .first()
+    )
+    if not sim:
+        return {
+            "has_data": False,
+            "note": f"No saved simulation named {name!r} was found for this business.",
+        }
+    return {
+        "has_data": True,
+        "name": sim.name,
+        "scenario_type": sim.scenario_type,
+        "parameters": sim.parameters,
+        "baseline_start_date": sim.baseline_start_date.isoformat(),
+        "baseline_end_date": sim.baseline_end_date.isoformat(),
+        "assumptions": sim.assumptions,
+        "results": sim.results,
+    }
