@@ -7,16 +7,25 @@
 .header h1 {
   font-size: 1.5rem;
   font-weight: 700;
+  color: var(--foreground);
 }
 
 .formCard,
 .resultsCard,
 .savedCard {
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--border, #e5e7eb);
+  background: #11151d;
+  border: 1px solid #1f2532;
   border-radius: 0.75rem;
   padding: 1.25rem;
   margin-bottom: 1.5rem;
+  color: var(--foreground);
+}
+
+.resultsCard h2,
+.resultsCard h3,
+.savedCard h2 {
+  color: var(--foreground);
+  margin-bottom: 0.75rem;
 }
 
 .formRow {
@@ -31,24 +40,26 @@
   display: flex;
   flex-direction: column;
   font-size: 0.85rem;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
   gap: 0.35rem;
 }
 
 .formRow input,
 .formRow select {
   padding: 0.5rem 0.6rem;
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid #1f2532;
   border-radius: 0.5rem;
   font-size: 0.9rem;
   min-width: 160px;
+  background: #0f1420;
+  color: var(--foreground);
 }
 
 .runButton {
   padding: 0.6rem 1.25rem;
   border: none;
   border-radius: 0.5rem;
-  background: var(--accent, #4f46e5);
+  background: var(--accent);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
@@ -61,7 +72,7 @@
 }
 
 .error {
-  color: #dc2626;
+  color: #ff6b6b;
   font-size: 0.85rem;
   margin-top: 0.5rem;
 }
@@ -70,19 +81,25 @@
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
+  color: var(--foreground);
 }
 
 .resultsTable th,
 .resultsTable td {
   text-align: left;
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  border-bottom: 1px solid #1f2532;
   font-size: 0.9rem;
+}
+
+.resultsTable th {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .assumptions {
   padding-left: 1.25rem;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
   font-size: 0.85rem;
   line-height: 1.6;
 }
@@ -97,8 +114,20 @@
 .saveRow input {
   flex: 1;
   padding: 0.5rem 0.6rem;
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid #1f2532;
   border-radius: 0.5rem;
+  background: #0f1420;
+  color: var(--foreground);
+}
+
+.saveRow button {
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .savedList {
@@ -121,23 +150,24 @@
   align-items: flex-start;
   gap: 0.15rem;
   padding: 0.6rem 0.75rem;
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid #1f2532;
   border-radius: 0.5rem;
   background: transparent;
   cursor: pointer;
   text-align: left;
+  color: var(--foreground);
 }
 
 .savedItemButton span {
   font-size: 0.8rem;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
   text-transform: capitalize;
 }
 
 .deleteButton {
   border: none;
   background: transparent;
-  color: #dc2626;
+  color: #ff6b6b;
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0 0.5rem;
