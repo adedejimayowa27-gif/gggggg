@@ -177,3 +177,71 @@ export interface AssistantMessageResponse {
   user_message: ChatMessage;
   assistant_message: ChatMessage;
 }
+
+// --- Simulator ---------------------------------------------------------
+//
+// Mirrors backend/app/schemas/simulation.py.
+
+export type ScenarioType =
+  | "selling_price_change"
+  | "cost_price_change"
+  | "demand_change"
+  | "sales_volume_change";
+
+export type ScopeType = "business" | "category" | "product";
+
+export interface ScenarioParameters {
+  scope_type: ScopeType;
+  scope_value: string | null;
+  change_percentage: string;
+}
+
+export interface ScenarioMetrics {
+  revenue: string;
+  total_cost: string;
+  gross_profit: string;
+  profit_margin: string;
+  units_sold: string;
+}
+
+export interface ScenarioDiff {
+  revenue_change: string;
+  revenue_change_pct: string | null;
+  total_cost_change: string;
+  total_cost_change_pct: string | null;
+  gross_profit_change: string;
+  gross_profit_change_pct: string | null;
+  profit_margin_change: string;
+}
+
+export interface SimulationResults {
+  current: ScenarioMetrics;
+  simulated: ScenarioMetrics;
+  diff: ScenarioDiff;
+}
+
+export interface SimulationRunResult {
+  scenario_type: ScenarioType;
+  parameters: ScenarioParameters;
+  baseline_start_date: string;
+  baseline_end_date: string;
+  assumptions: string[];
+  results: SimulationResults;
+}
+
+export interface Simulation extends SimulationRunResult {
+  id: string;
+  business_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface SimulationListItem {
+  id: string;
+  name: string;
+  scenario_type: ScenarioType;
+  parameters: ScenarioParameters;
+  baseline_start_date: string;
+  baseline_end_date: string;
+  created_at: string;
+}
