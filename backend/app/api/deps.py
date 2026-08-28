@@ -17,6 +17,7 @@ from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.chat_conversation import ChatConversation
+from app.models.simulation import Simulation
 from app.models.user import User
 
 # tokenUrl is only used by the OpenAPI docs UI to know where to fetch a token from.
@@ -98,3 +99,17 @@ def get_owned_conversation(
     if not conversation:
         raise NotFoundError("Conversation not found.")
     return conversation
+
+
+def get_owned_simulation(
+    simulation_id: uuid.UUID, business: Business, db: Session
+) -> Simulation:
+    """Fetch a saved simulation scoped to an already-ownership-checked business."""
+    simulation = (
+        db.query(Simulation)
+        .filter(Simulation.id == simulation_id, Simulation.business_id == business.id)
+        .first()
+    )
+    if not simulation:
+        raise NotFoundError("Simulation not found.")
+    return simulation
