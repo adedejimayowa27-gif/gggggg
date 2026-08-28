@@ -169,16 +169,22 @@ other business, and you should say so if asked.
 7. All monetary figures from tool results are in Nigerian Naira. Always write amounts with the \
 ₦ symbol and comma thousands separators (e.g. ₦1,234,567 or ₦45,000.50) -- never $, USD, or any \
 other currency, and never convert the number into another currency.
-8. Write your reply as plain conversational text only -- this is rendered in a plain chat \
+8. Simulations (get_simulation_by_name, list_simulations) are hypothetical what-if scenarios, not \
+real historical results -- always make that distinction clear when discussing one (e.g. "in this \
+simulation" / "if this scenario played out", not "your revenue was"). The comparison numbers were \
+already computed by the backend when the simulation was saved; never recompute, adjust, or \
+estimate them yourself, and never invent a simulation that wasn't actually saved. If has_data is \
+false, no simulation with that name exists -- say so and suggest checking the saved list.
+9. Write your reply as plain conversational text only -- this is rendered in a plain chat \
 bubble with no markdown support. Do not use asterisks, underscores, backticks, "#" headers, or \
 any other markdown/formatting syntax (no **bold**, no _italics_, no bullet "*"/"-" lists). If you \
 want to list a few items, write them as a short sentence or number them inline in plain prose \
 (e.g. "1. ..., 2. ..., 3. ...") instead of using markdown list markers.
-9. Once you have the data you need, answer in clear, concise natural language -- a short \
+10. Once you have the data you need, answer in clear, concise natural language -- a short \
 paragraph or a few short numbered points as plain text. Do not dump raw JSON at the user; \
 translate the numbers into an answer to what they actually asked. Cite the date range you used \
 when it's not obvious.
-10. If the question is not about this business's sales data (e.g. general chit-chat, advice \
+11. If the question is not about this business's sales data (e.g. general chit-chat, advice \
 unrelated to the numbers), answer briefly and helpfully without calling a tool.
 """
 
@@ -370,6 +376,43 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_simulations",
+            "description": (
+                "List this business's saved what-if simulations (name, scenario type, parameters, "
+                "date range, created_at), most recent first. Use this to find a simulation's exact "
+                "name before calling get_simulation_by_name, or to answer 'what simulations have I run'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max simulations to return. Defaults to 20."},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_simulation_by_name",
+            "description": (
+                "Fetch one saved simulation's full assumptions and computed current-vs-simulated "
+                "results by its exact name (case-insensitive). These numbers were already computed "
+                "by the backend scenario engine when the simulation was saved -- never recompute or "
+                "estimate them yourself; only explain what's returned. If has_data is false, no "
+                "simulation with that name exists -- say so rather than guessing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "The simulation's exact saved name."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
 ]
 
 
@@ -477,6 +520,17 @@ def _handle_get_breakdown(db: Session, business: Business, **kwargs) -> dict:
     )
 
 
+def _handle_list_simulations(db: Session, business: Business, **kwargs) -> dict:
+    return ai_tools.list_simulations(db, business, limit=int(kwargs.get("limit") or 20))
+
+
+def _handle_get_simulation_by_name(db: Session, business: Business, **kwargs) -> dict:
+    name = kwargs.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValidationError("name is required.")
+    return ai_tools.get_simulation_by_name(db, business, name)
+
+
 TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
     "resolve_date_range": _handle_resolve_date_range,
     "get_revenue": _handle_get_revenue,
@@ -487,6 +541,8 @@ TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
     "get_slow_products": _handle_get_slow_products,
     "compare_periods": _handle_compare_periods,
     "get_breakdown": _handle_get_breakdown,
+    "list_simulations": _handle_list_simulations,
+    "get_simulation_by_name": _handle_get_simulation_by_name,
 }
 
 
