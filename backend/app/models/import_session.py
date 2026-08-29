@@ -36,6 +36,11 @@ class ImportSession(Base):
 
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
 
+    # "file" (a CSV/XLSX upload) | "google_sheets" (Batch 9.4's sync).
+    # Existing rows get "file" via server_default -- this column's
+    # addition changes nothing about the file-upload path's behavior.
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="file")
+
     # "pending_mapping" -> uploaded and parsed, waiting for user to confirm
     #   column mapping.
     # "completed" -> user confirmed, valid rows stored as Transactions.
@@ -68,6 +73,12 @@ class ImportSession(Base):
     # List of {"row_number": int, "errors": [str, ...]} for rows that
     # failed validation, so the user can see exactly what went wrong.
     row_errors: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
+    # Only ever populated for source="google_sheets" -- how many parsed
+    # rows were skipped because a Transaction with the same fingerprint
+    # already exists for this business (requirement #7). Null/unused for
+    # file uploads, which have no duplicate-detection step.
+    skipped_duplicate_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
