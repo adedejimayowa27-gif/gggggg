@@ -53,6 +53,29 @@ router = APIRouter(prefix="/businesses/{business_id}/google", tags=["google-inte
 callback_router = APIRouter(prefix="/google", tags=["google-integration"])
 
 
+def _to_status_out(integration: GoogleIntegration) -> GoogleIntegrationStatusOut:
+    """
+    has_confirmed_mapping isn't a real column (it's derived from
+    confirmed_mapping being set or not), so this can't go through
+    GoogleIntegrationStatusOut.model_validate(integration) directly --
+    every route returning this schema builds it through here instead.
+    """
+    return GoogleIntegrationStatusOut(
+        id=integration.id,
+        business_id=integration.business_id,
+        google_email=integration.google_email,
+        status=integration.status,
+        scopes=integration.scopes,
+        spreadsheet_id=integration.spreadsheet_id,
+        spreadsheet_name=integration.spreadsheet_name,
+        worksheet_title=integration.worksheet_title,
+        has_confirmed_mapping=integration.confirmed_mapping is not None,
+        last_synced_at=integration.last_synced_at,
+        last_sync_error=integration.last_sync_error,
+        created_at=integration.created_at,
+    )
+
+
 @router.get("/connect", response_model=GoogleConnectOut)
 def connect_google(business: Business = Depends(get_owned_business)):
     return GoogleConnectOut(authorization_url=get_authorization_url(str(business.id)))
@@ -87,7 +110,7 @@ def get_google_status(
     integration = db.query(GoogleIntegration).filter(GoogleIntegration.business_id == business.id).first()
     if not integration:
         return None
-    return GoogleIntegrationStatusOut.model_validate(integration)
+    return _to_status_out(integration)
 
 
 @router.delete("", status_code=204)
@@ -143,7 +166,7 @@ def set_selection(
     integration.worksheet_title = payload.worksheet_title
     db.commit()
     db.refresh(integration)
-    return GoogleIntegrationStatusOut.model_validate(integration)
+    return _to_status_out(integration)
 
 
 @router.get("/preview", response_model=SheetPreviewOut)
@@ -175,7 +198,7 @@ def set_mapping(
     """Saves the confirmed column mapping -- every future 'Sync Now' reuses this automatically."""
     integration = get_connected_google_integration(business, db)
     save_mapping(db, integration, payload.mapping)
-    return GoogleIntegrationStatusOut.model_validate(integration)
+    return _to_status_out(integration)
 
 
 @router.post("/sync", response_model=SyncResultOut)
