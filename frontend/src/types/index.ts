@@ -274,3 +274,58 @@ export interface Alert extends AlertListItem {
   supporting_values: Record<string, unknown>;
   resolved_at: string | null;
 }
+
+// --- Google Sheets integration -------------------------------------------
+//
+// Mirrors backend/app/schemas/google_integration.py.
+
+export interface GoogleIntegrationStatus {
+  id: string;
+  business_id: string;
+  google_email: string;
+  status: string;
+  scopes: string;
+  spreadsheet_id: string | null;
+  spreadsheet_name: string | null;
+  worksheet_title: string | null;
+  has_confirmed_mapping: boolean;
+  last_synced_at: string | null;
+  last_sync_error: string | null;
+  created_at: string;
+}
+
+export interface SpreadsheetItem {
+  id: string;
+  name: string;
+  modified_time: string | null;
+}
+
+export interface WorksheetItem {
+  title: string;
+  sheet_id: number;
+  row_count: number | null;
+  column_count: number | null;
+}
+
+export interface SheetPreview {
+  detected_columns: string[];
+  suggested_mapping: Record<string, string | null>;
+  preview_rows: Record<string, unknown>[];
+  total_row_count: number;
+}
+
+export interface SyncRowError {
+  row_number: number;
+  errors: string[];
+}
+
+export interface SyncResult {
+  id: string;
+  status: string;
+  total_row_count: number;
+  imported_row_count: number;
+  skipped_duplicate_count: number;
+  failed_row_count: number;
+  row_errors: SyncRowError[];
+  synced_at: string;
+}
