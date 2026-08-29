@@ -20,6 +20,7 @@ not Decimal/date objects), since these are meant to be handed back to
 an LLM as tool-call results.
 """
 import re
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -30,6 +31,7 @@ from app.core.exceptions import ValidationError
 from app.models.business import Business
 from app.models.transaction import Transaction
 from app.models.simulation import Simulation
+from app.models.alert import Alert
 from app.services.analytics import (
     BREAKDOWN_UNSET_LABELS,
     BreakdownField,
@@ -608,4 +610,74 @@ def get_simulation_by_name(db: Session, business: Business, name: str) -> dict:
         "baseline_end_date": sim.baseline_end_date.isoformat(),
         "assumptions": sim.assumptions,
         "results": sim.results,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Alert tools (Step 8). Same pattern as the simulation tools above: these
+# only fetch already-computed Alert rows (see app.services.alert_engine,
+# which does the actual detection math) -- the assistant explains and
+# suggests actions, it never determines whether something is an anomaly.
+# ---------------------------------------------------------------------------
+
+
+def list_alerts(db: Session, business: Business, status: str | None = None, limit: int = 20) -> dict:
+    """List this business's alerts, most recent first, optionally filtered by status
+    (unread/read/dismissed/resolved)."""
+    _validate_limit(limit)
+    query = db.query(Alert).filter(Alert.business_id == business.id)
+    if status:
+        query = query.filter(Alert.status == status)
+    rows = query.order_by(Alert.created_at.desc()).limit(limit).all()
+    return {
+        "alerts": [
+            {
+                "id": str(a.id),
+                "alert_type": a.alert_type,
+                "severity": a.severity,
+                "title": a.title,
+                "message": a.message,
+                "affected_product": a.affected_product,
+                "affected_category": a.affected_category,
+                "affected_metric": a.affected_metric,
+                "status": a.status,
+                "created_at": a.created_at.isoformat(),
+            }
+            for a in rows
+        ],
+        "has_data": len(rows) > 0,
+    }
+
+
+def get_alert_details(db: Session, business: Business, alert_id: str) -> dict:
+    """
+    Fetch one alert's full detail, including supporting_values -- the
+    backend-computed evidence (baseline mean/stddev, observed value,
+    z-score, etc.) behind the alert. Returns has_data: false with a note
+    if the id doesn't match any alert for this business.
+    """
+    try:
+        parsed_id = uuid.UUID(alert_id)
+    except ValueError:
+        return {"has_data": False, "note": f"{alert_id!r} is not a valid alert id."}
+
+    alert = db.query(Alert).filter(Alert.id == parsed_id, Alert.business_id == business.id).first()
+    if not alert:
+        return {"has_data": False, "note": "No alert with that id was found for this business."}
+
+    return {
+        "has_data": True,
+        "id": str(alert.id),
+        "alert_type": alert.alert_type,
+        "severity": alert.severity,
+        "title": alert.title,
+        "message": alert.message,
+        "affected_product": alert.affected_product,
+        "affected_category": alert.affected_category,
+        "affected_metric": alert.affected_metric,
+        "period_start": alert.period_start.isoformat(),
+        "period_end": alert.period_end.isoformat(),
+        "supporting_values": alert.supporting_values,
+        "status": alert.status,
+        "created_at": alert.created_at.isoformat(),
     }
