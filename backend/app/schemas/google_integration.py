@@ -32,6 +32,7 @@ class GoogleIntegrationStatusOut(BaseModel):
     spreadsheet_id: str | None
     spreadsheet_name: str | None
     worksheet_title: str | None
+    has_confirmed_mapping: bool
     last_synced_at: datetime | None
     last_sync_error: str | None
     created_at: datetime
