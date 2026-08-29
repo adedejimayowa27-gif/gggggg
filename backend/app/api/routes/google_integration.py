@@ -25,8 +25,11 @@ from app.models.google_integration import GoogleIntegration
 from app.schemas.google_integration import (
     GoogleConnectOut,
     GoogleIntegrationStatusOut,
+    MappingIn,
     SelectionIn,
+    SheetPreviewOut,
     SpreadsheetOut,
+    SyncResultOut,
     WorksheetOut,
 )
 from app.services.google_oauth import (
@@ -39,6 +42,7 @@ from app.services.google_oauth import (
     verify_oauth_state,
 )
 from app.services.google_sheets import get_spreadsheet_title, list_spreadsheets, list_worksheets
+from app.services.sheets_sync import preview_sheet, save_mapping, sync_now
 
 router = APIRouter(prefix="/businesses/{business_id}/google", tags=["google-integration"])
 
@@ -140,3 +144,59 @@ def set_selection(
     db.commit()
     db.refresh(integration)
     return GoogleIntegrationStatusOut.model_validate(integration)
+
+
+@router.get("/preview", response_model=SheetPreviewOut)
+def get_sheet_preview(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """
+    Reads the currently-selected worksheet right now and suggests a
+    column mapping, without importing anything -- the Sheets equivalent
+    of the file importer's upload-preview step (requirement #4).
+    """
+    integration = get_connected_google_integration(business, db)
+    headers, mapping, preview_rows, total_row_count = preview_sheet(db, business, integration)
+    return SheetPreviewOut(
+        detected_columns=headers,
+        suggested_mapping=mapping,
+        preview_rows=preview_rows,
+        total_row_count=total_row_count,
+    )
+
+
+@router.put("/mapping", response_model=GoogleIntegrationStatusOut)
+def set_mapping(
+    payload: MappingIn,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Saves the confirmed column mapping -- every future 'Sync Now' reuses this automatically."""
+    integration = get_connected_google_integration(business, db)
+    save_mapping(db, integration, payload.mapping)
+    return GoogleIntegrationStatusOut.model_validate(integration)
+
+
+@router.post("/sync", response_model=SyncResultOut)
+def run_sync(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """
+    'Sync Now' (requirement #9): re-reads the sheet, validates every row
+    through the same pipeline a file upload uses, skips already-imported
+    rows, persists the rest, and returns a clear success/error summary.
+    """
+    integration = get_connected_google_integration(business, db)
+    import_session = sync_now(db, business, integration)
+    return SyncResultOut(
+        id=import_session.id,
+        status=import_session.status,
+        total_row_count=import_session.total_row_count,
+        imported_row_count=import_session.imported_row_count or 0,
+        skipped_duplicate_count=import_session.skipped_duplicate_count or 0,
+        failed_row_count=import_session.failed_row_count or 0,
+        row_errors=import_session.row_errors,
+        synced_at=integration.last_synced_at,
+    )
