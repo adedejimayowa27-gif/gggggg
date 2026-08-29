@@ -8,10 +8,10 @@ orchestrator runs every registered detector, deduplicates against
 existing alerts, assigns final severity, and writes Alert rows.
 
 Registry design (requirement #12): DETECTORS maps an alert_type string
-to a detector function. This batch registers 3 detector functions
-(unusual_sales, revenue_profit_change, falling_profit_margin); Batch 8.3
-adds more entries to this same dict. Nothing about this module's shape
-changes when a new detector is added.
+to a detector function. 8 detector functions are registered, covering
+every detection type Step 8 asks for. Adding a new one later is a new
+function plus one new registry entry -- nothing about this module's
+shape, or any existing detector, changes.
 
 Baseline design (requirement #2): where enough historical data exists,
 detectors compare the current period against a business-specific
@@ -30,9 +30,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Callable
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.business import Business
+from app.models.transaction import Transaction
 from app.services.analytics import cost_expr, period_filters, revenue_expr, transaction_count_expr, units_expr
 
 # Minimum number of historical comparison windows required before a
@@ -64,6 +66,7 @@ class AlertCandidate:
     affected_product: str | None = None
     affected_category: str | None = None
     affected_metric: str | None = None
+    related_transaction_id: str | None = None
 
 
 def _severity_from_bands(magnitude: float, bands: list[tuple[float, str]]) -> str | None:
@@ -324,8 +327,402 @@ def detect_falling_profit_margin(
     ]
 
 
+# Minimum previous-period revenue for a product before its % change is
+# considered meaningful -- avoids flagging a product that went from
+# ₦50 to ₦200 (a "300% increase" that's really just noise).
+MIN_PRODUCT_REVENUE_FOR_TREND = Decimal(1000)
+
+# Minimum number of individual transactions in the baseline window
+# before per-transaction outlier detection is trusted statistically.
+MIN_TRANSACTIONS_FOR_OUTLIER_BASELINE = 10
+
+# Cap on how many outlier-transaction candidates one run surfaces, so a
+# genuinely chaotic period doesn't flood the alert list.
+MAX_OUTLIER_CANDIDATES = 3
+
+
+def _product_totals(db: Session, business: Business, start: date, end: date) -> dict[str, dict]:
+    """Per-product revenue/cost/units/count for one window, weighted-avg
+    cost price included since that's what the cost-change detector needs
+    (total cost alone conflates a price change with a volume change)."""
+    rows = (
+        db.query(
+            Transaction.product.label("product"),
+            revenue_expr().label("revenue"),
+            cost_expr().label("total_cost"),
+            units_expr().label("units_sold"),
+            transaction_count_expr().label("transaction_count"),
+        )
+        .filter(*period_filters(business, start, end))
+        .group_by(Transaction.product)
+        .all()
+    )
+    result = {}
+    for row in rows:
+        units = Decimal(row.units_sold)
+        total_cost = Decimal(row.total_cost)
+        result[row.product] = {
+            "revenue": Decimal(row.revenue),
+            "total_cost": total_cost,
+            "units_sold": units,
+            "transaction_count": row.transaction_count,
+            "avg_cost_price": (total_cost / units) if units > 0 else Decimal(0),
+        }
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Detector 4: fast-growing and slow-moving products
+# ---------------------------------------------------------------------------
+
+
+def detect_product_trends(
+    db: Session, business: Business, today: date | None = None, window_days: int = 30
+) -> list[AlertCandidate]:
+    """
+    Per-product revenue this window_days vs the previous window_days.
+    Requires at least MIN_PRODUCT_REVENUE_FOR_TREND in the previous
+    period before a product's % change counts -- a brand-new or
+    negligible-volume product swinging wildly isn't a meaningful trend,
+    it's just small numbers.
+    """
+    reference = today or date.today()
+    current_start = reference - timedelta(days=window_days - 1)
+    previous_end = current_start - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=window_days - 1)
+
+    current = _product_totals(db, business, current_start, reference)
+    previous = _product_totals(db, business, previous_start, previous_end)
+
+    month_bucket = reference.strftime("%Y-%m")
+    candidates: list[AlertCandidate] = []
+
+    for product, prev_data in previous.items():
+        if prev_data["revenue"] < MIN_PRODUCT_REVENUE_FOR_TREND:
+            continue
+        current_revenue = current.get(product, {}).get("revenue", Decimal(0))
+        change_pct = _pct_change(prev_data["revenue"], current_revenue)
+        if change_pct is None:
+            continue
+        severity = _severity_from_bands(abs(float(change_pct)), _PCT_SEVERITY_BANDS)
+        if severity is None:
+            continue
+
+        is_growing = change_pct > 0
+        alert_type = "fast_growing_product" if is_growing else "slow_moving_product"
+        verb = "grown" if is_growing else "slowed down"
+        candidates.append(
+            AlertCandidate(
+                alert_type=alert_type,
+                severity=severity,
+                title=f"{product} has {verb} {abs(float(change_pct)):.0f}%",
+                message=(
+                    f"{product}'s revenue over the last {window_days} days was ₦{current_revenue:,.2f}, "
+                    f"versus ₦{prev_data['revenue']:,.2f} in the previous {window_days} days -- "
+                    f"a {abs(float(change_pct)):.1f}% {'increase' if is_growing else 'decrease'}."
+                ),
+                affected_product=product,
+                affected_metric="revenue",
+                period_start=current_start,
+                period_end=reference,
+                supporting_values={
+                    "method": "period_over_period",
+                    "current_value": float(current_revenue),
+                    "previous_value": float(prev_data["revenue"]),
+                    "change_pct": float(change_pct),
+                    "window_days": window_days,
+                },
+                dedupe_key=f"{alert_type}:{product}:{month_bucket}",
+            )
+        )
+    return candidates
+
+
+# ---------------------------------------------------------------------------
+# Detector 5: significant product cost changes
+# ---------------------------------------------------------------------------
+
+
+def detect_product_cost_change(
+    db: Session, business: Business, today: date | None = None, window_days: int = 30
+) -> list[AlertCandidate]:
+    """
+    Per-product weighted-average cost price this window_days vs the
+    previous window_days -- deliberately cost PRICE per unit, not total
+    cost, so a supplier price hike is distinguished from simply selling
+    more units.
+    """
+    reference = today or date.today()
+    current_start = reference - timedelta(days=window_days - 1)
+    previous_end = current_start - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=window_days - 1)
+
+    current = _product_totals(db, business, current_start, reference)
+    previous = _product_totals(db, business, previous_start, previous_end)
+
+    month_bucket = reference.strftime("%Y-%m")
+    candidates: list[AlertCandidate] = []
+
+    for product, prev_data in previous.items():
+        if prev_data["avg_cost_price"] <= 0:
+            continue
+        current_cost = current.get(product, {}).get("avg_cost_price", Decimal(0))
+        if current_cost <= 0:
+            continue  # not sold in current window -- no basis for a cost comparison
+        change_pct = _pct_change(prev_data["avg_cost_price"], current_cost)
+        if change_pct is None:
+            continue
+        severity = _severity_from_bands(abs(float(change_pct)), _PCT_SEVERITY_BANDS)
+        if severity is None:
+            continue
+
+        direction = "risen" if change_pct > 0 else "fallen"
+        candidates.append(
+            AlertCandidate(
+                alert_type="product_cost_change",
+                severity=severity,
+                title=f"{product}'s cost price has {direction} {abs(float(change_pct)):.0f}%",
+                message=(
+                    f"{product}'s average cost price over the last {window_days} days was "
+                    f"₦{current_cost:,.2f} per unit, versus ₦{prev_data['avg_cost_price']:,.2f} in the "
+                    f"previous {window_days} days -- a {abs(float(change_pct)):.1f}% {direction[:-1]}. "
+                    "This affects your margin even if you haven't changed your selling price."
+                ),
+                affected_product=product,
+                affected_metric="cost_price",
+                period_start=current_start,
+                period_end=reference,
+                supporting_values={
+                    "method": "period_over_period_unit_cost",
+                    "current_avg_cost_price": float(current_cost),
+                    "previous_avg_cost_price": float(prev_data["avg_cost_price"]),
+                    "change_pct": float(change_pct),
+                    "window_days": window_days,
+                },
+                dedupe_key=f"product_cost_change:{product}:{month_bucket}",
+            )
+        )
+    return candidates
+
+
+# ---------------------------------------------------------------------------
+# Detector 6: unusual transaction patterns (single-transaction outliers)
+# ---------------------------------------------------------------------------
+
+
+def detect_unusual_transactions(
+    db: Session,
+    business: Business,
+    today: date | None = None,
+    recent_days: int = 7,
+    baseline_days: int = 60,
+) -> list[AlertCandidate]:
+    """
+    Flags individual transactions in the last `recent_days` whose revenue
+    (quantity * selling_price) is a statistical outlier versus this
+    business's own transaction-size baseline over the preceding
+    `baseline_days` -- e.g. one sale far larger than anything typical,
+    which could be a bulk order worth noticing, a pricing mistake, or a
+    data-entry error. Requires at least
+    MIN_TRANSACTIONS_FOR_OUTLIER_BASELINE baseline transactions;
+    otherwise skips (too little history to know what's "typical" for
+    this business). Caps output at MAX_OUTLIER_CANDIDATES, most extreme
+    first, so a genuinely volatile period doesn't flood the alert list.
+    """
+    reference = today or date.today()
+    recent_start = reference - timedelta(days=recent_days - 1)
+    baseline_end = recent_start - timedelta(days=1)
+    baseline_start = baseline_end - timedelta(days=baseline_days - 1)
+
+    baseline_rows = (
+        db.query(Transaction.quantity, Transaction.selling_price)
+        .filter(*period_filters(business, baseline_start, baseline_end))
+        .all()
+    )
+    if len(baseline_rows) < MIN_TRANSACTIONS_FOR_OUTLIER_BASELINE:
+        return []
+
+    baseline_values = [float(r.quantity * r.selling_price) for r in baseline_rows]
+    baseline_mean = statistics.mean(baseline_values)
+    baseline_stddev = statistics.pstdev(baseline_values)
+
+    recent_rows = (
+        db.query(Transaction)
+        .filter(*period_filters(business, recent_start, reference))
+        .all()
+    )
+
+    scored = []
+    for txn in recent_rows:
+        value = float(txn.quantity * txn.selling_price)
+        if baseline_stddev == 0:
+            # A perfectly uniform baseline can't produce a real z-score,
+            # but any deviation from it is still notable -- same
+            # reasoning as detect_unusual_sales's zero-stddev case.
+            if value == baseline_mean:
+                continue
+            z_score = 4.0 if value > baseline_mean else -4.0
+        else:
+            z_score = (value - baseline_mean) / baseline_stddev
+        severity = _severity_from_bands(abs(z_score), _Z_SEVERITY_BANDS)
+        if severity is not None:
+            scored.append((abs(z_score), z_score, severity, txn, value))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+
+    candidates: list[AlertCandidate] = []
+    for _, z_score, severity, txn, value in scored[:MAX_OUTLIER_CANDIDATES]:
+        candidates.append(
+            AlertCandidate(
+                alert_type="unusual_transaction_pattern",
+                severity=severity,
+                title=f"Unusually large transaction: {txn.product}",
+                message=(
+                    f"A transaction on {txn.date.isoformat()} for {txn.product} was worth "
+                    f"₦{value:,.2f} ({txn.quantity} units at ₦{txn.selling_price:,.2f}), compared to "
+                    f"a typical transaction size of ₦{baseline_mean:,.2f} for this business -- "
+                    f"a {abs(z_score):.1f} standard-deviation outlier."
+                ),
+                affected_product=txn.product,
+                affected_metric="transaction_value",
+                related_transaction_id=str(txn.id),
+                period_start=recent_start,
+                period_end=reference,
+                supporting_values={
+                    "method": "statistical_baseline",
+                    "baseline_mean_transaction_value": round(baseline_mean, 2),
+                    "baseline_stddev_transaction_value": round(baseline_stddev, 2),
+                    "baseline_transaction_count": len(baseline_rows),
+                    "observed_value": round(value, 2),
+                    "z_score": round(z_score, 2),
+                },
+                dedupe_key=f"unusual_transaction_pattern:{txn.id}",
+            )
+        )
+    return candidates
+
+
+# ---------------------------------------------------------------------------
+# Detector 7: potential stock shortages -- graceful stub
+# ---------------------------------------------------------------------------
+
+
+def detect_stock_shortage(db: Session, business: Business, today: date | None = None) -> list[AlertCandidate]:
+    """
+    Always returns no candidates. The Transaction model (and the rest of
+    this app) has no inventory/stock-on-hand field at all -- there is
+    nothing to compute a shortage from. Rather than fabricate a shortage
+    signal from proxy data (which would misrepresent what the business
+    actually has in stock), this detector is a deliberate no-op, kept in
+    the registry (requirement #12) so it's the one place to implement
+    real stock-shortage detection once inventory tracking exists,
+    without touching the orchestrator or any other detector. This is the
+    "gracefully handle unavailable fields" requirement (#11) applied at
+    the detector level: silence, not a guess.
+    """
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Detector 8: forecasted revenue decline (simple internal trend projection)
+# ---------------------------------------------------------------------------
+
+# How many trailing weekly points feed the trend line -- 6 gives a
+# reasonable signal without demanding months of history.
+FORECAST_TREND_WINDOWS = 6
+
+
+def _linear_projection(values: list[float]) -> tuple[float, float]:
+    """Ordinary least-squares fit of values against 0..n-1; returns
+    (slope, projected_next_value). No external stats/ML dependency --
+    this is intentionally simple, see detect_forecast_revenue_decline's
+    docstring for why."""
+    n = len(values)
+    xs = list(range(n))
+    mean_x = statistics.mean(xs)
+    mean_y = statistics.mean(values)
+    denominator = sum((x - mean_x) ** 2 for x in xs)
+    if denominator == 0:
+        return 0.0, mean_y
+    slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, values)) / denominator
+    intercept = mean_y - slope * mean_x
+    projected = intercept + slope * n  # the next point after the observed range
+    return slope, projected
+
+
+def detect_forecast_revenue_decline(
+    db: Session, business: Business, today: date | None = None
+) -> list[AlertCandidate]:
+    """
+    IMPORTANT: this app has no dedicated forecasting feature/model. This
+    detector fits a simple linear trend to the last FORECAST_TREND_WINDOWS
+    weekly revenue totals and projects one week forward -- a deliberately
+    basic, transparent projection, not a real forecasting system. Every
+    alert this produces says so explicitly in its message and
+    supporting_values (method: "internal_linear_trend_projection"), so
+    it's never confused with a proper forecast.
+
+    Only fires when the trend is actually declining (negative slope) and
+    the projected next week is a meaningful drop from the recent average
+    -- a flat or growing trend never triggers this detector.
+    """
+    reference = today or date.today()
+    windows = _consecutive_windows(reference, 7, FORECAST_TREND_WINDOWS)
+    period_data = [_period_totals(db, business, s, e) for s, e in windows]
+
+    if any(p["transaction_count"] == 0 for p in period_data):
+        return []  # a gap week makes the trend line unreliable
+
+    revenues = [float(p["revenue"]) for p in period_data]
+    slope, projected = _linear_projection(revenues)
+    if slope >= 0:
+        return []  # flat or growing -- nothing to warn about here
+
+    recent_average = statistics.mean(revenues[-2:])  # smooth over the last 2 actual weeks
+    projected = max(projected, 0.0)
+    change_pct = _pct_change(Decimal(recent_average), Decimal(projected))
+    if change_pct is None or change_pct >= 0:
+        return []
+
+    severity = _severity_from_bands(abs(float(change_pct)), _PCT_SEVERITY_BANDS)
+    if severity is None:
+        return []
+
+    week_bucket = reference.isocalendar()[:2]
+    return [
+        AlertCandidate(
+            alert_type="forecast_revenue_decline",
+            severity=severity,
+            title=f"Revenue trending down -- projected {abs(float(change_pct)):.0f}% lower next week",
+            message=(
+                f"Based on a simple internal trend projection (not a dedicated forecasting model) over "
+                f"the last {FORECAST_TREND_WINDOWS} weeks, revenue is trending downward and next week is "
+                f"projected at roughly ₦{projected:,.2f}, versus a recent average of "
+                f"₦{recent_average:,.2f} -- about a {abs(float(change_pct)):.1f}% projected decline."
+            ),
+            affected_metric="revenue",
+            period_start=windows[0][0],
+            period_end=windows[-1][1],
+            supporting_values={
+                "method": "internal_linear_trend_projection",
+                "weekly_revenue": [round(r, 2) for r in revenues],
+                "trend_slope_per_week": round(slope, 2),
+                "recent_average_revenue": round(recent_average, 2),
+                "projected_next_week_revenue": round(projected, 2),
+                "projected_change_pct": float(change_pct),
+            },
+            dedupe_key=f"forecast_revenue_decline:business:{week_bucket[0]}-W{week_bucket[1]:02d}",
+        )
+    ]
+
+
 DETECTORS: dict[str, Callable[..., list[AlertCandidate]]] = {
     "unusual_sales": detect_unusual_sales,
     "revenue_profit_change": detect_revenue_profit_change,
     "falling_profit_margin": detect_falling_profit_margin,
+    "product_trends": detect_product_trends,
+    "product_cost_change": detect_product_cost_change,
+    "unusual_transactions": detect_unusual_transactions,
+    "stock_shortage": detect_stock_shortage,
+    "forecast_revenue_decline": detect_forecast_revenue_decline,
 }
