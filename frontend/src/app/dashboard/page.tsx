@@ -9,6 +9,7 @@ import { fetchAnalyticsSummary } from "@/lib/analytics";
 import type { AnalyticsSummary, Business, DateRangeValue } from "@/types";
 import MetricCard from "@/components/MetricCard";
 import DateRangePicker from "@/components/DateRangePicker";
+import AlertsPanel from "@/components/AlertsPanel";
 import styles from "./overview.module.css";
 
 const currencyFormatter = new Intl.NumberFormat("en-NG", {
@@ -198,6 +199,8 @@ export default function OverviewPage() {
           Upload Transactions
         </Link>
       </div>
+
+      {token && <AlertsPanel businessId={primaryBusiness.id} token={token} compact />}
 
       <div className={styles.cardsGrid}>
         <MetricCard
