@@ -23,7 +23,12 @@ from app.schemas.import_session import (
     ImportPreviewOut,
     ImportSessionOut,
 )
-from app.services.import_pipeline import parse_upload, suggest_mapping, validate_and_convert_rows
+from app.services.import_pipeline import (
+    compute_fingerprint,
+    parse_upload,
+    suggest_mapping,
+    validate_and_convert_rows,
+)
 
 router = APIRouter(prefix="/businesses/{business_id}/imports", tags=["imports"])
 
@@ -108,6 +113,7 @@ def confirm_import(
             Transaction(
                 business_id=business.id,
                 import_session_id=import_session.id,
+                fingerprint=compute_fingerprint(str(business.id), row),
                 **row,
             )
         )
