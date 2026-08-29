@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -65,6 +65,12 @@ class GoogleIntegration(Base):
     spreadsheet_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     spreadsheet_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     worksheet_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # The column mapping the user confirmed once (via PUT .../mapping,
+    # Batch 9.4) -- reused automatically by every subsequent "Sync Now"
+    # (and, later, any background sync job) without asking again. Null
+    # until the user has reviewed and saved a mapping at least once.
+    confirmed_mapping: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Synchronization metadata (requirement #10 -- track last successful
     # sync, and design for future background syncing). last_synced_at is
