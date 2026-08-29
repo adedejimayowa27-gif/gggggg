@@ -49,6 +49,16 @@ class Transaction(Base):
     customer: Mapped[str | None] = mapped_column(String(255), nullable=True)
     payment_method: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
+    # Batch 9.3: a stable hash of this row's identifying fields, computed
+    # by app.services.import_pipeline.compute_fingerprint at import time
+    # for every source (file upload or Google Sheets sync). Nullable so
+    # existing rows imported before this column existed are unaffected.
+    # Only the Sheets sync path (Batch 9.4) actively queries against this
+    # for duplicate-skipping -- the file importer computes and stores it
+    # too (for consistency and future use) but its import behavior is
+    # otherwise completely unchanged.
+    fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
