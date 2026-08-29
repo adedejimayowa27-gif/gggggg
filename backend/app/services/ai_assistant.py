@@ -175,16 +175,24 @@ simulation" / "if this scenario played out", not "your revenue was"). The compar
 already computed by the backend when the simulation was saved; never recompute, adjust, or \
 estimate them yourself, and never invent a simulation that wasn't actually saved. If has_data is \
 false, no simulation with that name exists -- say so and suggest checking the saved list.
-9. Write your reply as plain conversational text only -- this is rendered in a plain chat \
+9. Alerts (list_alerts, get_alert_details) were raised automatically by the backend's detection \
+engine using statistical baselines and rules -- not by you. When explaining one, use only the \
+title/message/supporting_values you're given to describe what changed and why it's flagged; never \
+invent a cause the data doesn't show (e.g. don't assume "a competitor opened nearby" unless the \
+user tells you that). You can suggest reasonable, data-backed next steps (e.g. "check whether this \
+product's supplier price actually increased" for a cost-change alert), but frame them as \
+suggestions to investigate, not confirmed facts. If has_data is false, no alert with that id \
+exists -- say so rather than guessing.
+10. Write your reply as plain conversational text only -- this is rendered in a plain chat \
 bubble with no markdown support. Do not use asterisks, underscores, backticks, "#" headers, or \
 any other markdown/formatting syntax (no **bold**, no _italics_, no bullet "*"/"-" lists). If you \
 want to list a few items, write them as a short sentence or number them inline in plain prose \
 (e.g. "1. ..., 2. ..., 3. ...") instead of using markdown list markers.
-10. Once you have the data you need, answer in clear, concise natural language -- a short \
+11. Once you have the data you need, answer in clear, concise natural language -- a short \
 paragraph or a few short numbered points as plain text. Do not dump raw JSON at the user; \
 translate the numbers into an answer to what they actually asked. Cite the date range you used \
 when it's not obvious.
-11. If the question is not about this business's sales data (e.g. general chit-chat, advice \
+12. If the question is not about this business's sales data (e.g. general chit-chat, advice \
 unrelated to the numbers), answer briefly and helpfully without calling a tool.
 """
 
@@ -413,6 +421,50 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_alerts",
+            "description": (
+                "List this business's proactively-detected alerts (id, type, severity, title, "
+                "message, affected product/category/metric, status), most recent first. Use this to "
+                "find an alert's id before calling get_alert_details, or to answer 'what alerts do I "
+                "have' / 'what needs my attention'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["unread", "read", "dismissed", "resolved"],
+                        "description": "Optional filter. Omit to list all statuses.",
+                    },
+                    "limit": {"type": "integer", "description": "Max alerts to return. Defaults to 20."},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_alert_details",
+            "description": (
+                "Fetch one alert's full detail by id, including supporting_values -- the "
+                "backend-computed evidence (baseline mean/stddev, observed value, z-score, "
+                "period-over-period change, etc.) that justifies it. These numbers were already "
+                "computed by the backend detection engine -- never recompute, adjust, or invent "
+                "them yourself; only explain what's returned and suggest data-backed next steps. If "
+                "has_data is false, no alert with that id exists -- say so rather than guessing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "alert_id": {"type": "string", "description": "The alert's id, from list_alerts."},
+                },
+                "required": ["alert_id"],
+            },
+        },
+    },
 ]
 
 
@@ -531,6 +583,17 @@ def _handle_get_simulation_by_name(db: Session, business: Business, **kwargs) ->
     return ai_tools.get_simulation_by_name(db, business, name)
 
 
+def _handle_list_alerts(db: Session, business: Business, **kwargs) -> dict:
+    return ai_tools.list_alerts(db, business, status=kwargs.get("status"), limit=int(kwargs.get("limit") or 20))
+
+
+def _handle_get_alert_details(db: Session, business: Business, **kwargs) -> dict:
+    alert_id = kwargs.get("alert_id")
+    if not isinstance(alert_id, str) or not alert_id.strip():
+        raise ValidationError("alert_id is required.")
+    return ai_tools.get_alert_details(db, business, alert_id)
+
+
 TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
     "resolve_date_range": _handle_resolve_date_range,
     "get_revenue": _handle_get_revenue,
@@ -543,6 +606,8 @@ TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
     "get_breakdown": _handle_get_breakdown,
     "list_simulations": _handle_list_simulations,
     "get_simulation_by_name": _handle_get_simulation_by_name,
+    "list_alerts": _handle_list_alerts,
+    "get_alert_details": _handle_get_alert_details,
 }
 
 
