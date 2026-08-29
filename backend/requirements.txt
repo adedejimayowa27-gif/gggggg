@@ -12,6 +12,12 @@ python-multipart==0.0.9
 email-validator==2.2.0
 pandas==2.2.3
 openpyxl==3.1.5
+# Google Sheets integration (Step 9) -- OAuth token exchange/refresh
+# calls and Fernet encryption of stored tokens. cryptography is also a
+# transitive dep of python-jose[cryptography] above, but pinned
+# explicitly here since app/services/google_oauth.py imports it directly.
+httpx==0.28.1
+cryptography==46.0.6
 # Range rather than an exact pin: verify/lock the current release for your
 # environment (`pip install openai` then freeze) rather than trusting this
 # one, since it wasn't resolved against a live package index here. Groq's
