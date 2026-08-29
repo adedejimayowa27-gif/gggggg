@@ -477,19 +477,25 @@ def compute_fingerprint(business_id: str, row: dict) -> str:
     detection (Step 9, requirement #7) -- additive, new function, not a
     change to validate_and_convert_rows or any existing behavior.
 
-    Built from every field that describes what actually happened (date,
-    product, quantity, prices, category/customer/payment_method) plus
-    business_id, so two different businesses recording an identical sale
-    never collide, and the same sale imported twice -- whether re-run
-    from the same file or re-read from an unchanged spreadsheet row --
-    always produces the same fingerprint.
+    Built from business_id plus only the "hard identity" fields of a
+    sale -- date, product, quantity, selling price, cost price.
+    Deliberately EXCLUDES category/customer/payment_method: those are
+    descriptive metadata a user might map for the first time in a later
+    sync (e.g. realizing they forgot to map Category) without the
+    underlying sale being any different. Including them would mean the
+    exact same real transaction produces a different fingerprint the
+    moment its mapping gets more complete, silently re-importing it as a
+    "new" row -- a real duplicate-creation bug found during Step 9's
+    verification pass, not a hypothetical one.
 
-    Deliberately excludes anything about *how* the row was imported
-    (which file, which import_session, which sync) -- fingerprinting the
-    transaction's own content, not its provenance, is what makes it
-    possible to recognize "this row already exists" across repeated
-    syncs of a spreadsheet that may reorder or partially overlap each
-    time.
+    This does mean two genuinely separate sales of the same product, same
+    quantity, same price, same day would collide and be treated as one --
+    an inherent limit of content-based fingerprinting with no stable
+    per-row ID from the source (Google Sheets row positions shift on
+    sort/insert, so they can't be used as one either). That trade-off is
+    the right one here: silently merging two rare, identical-looking
+    sales is a smaller problem than spuriously duplicating a transaction
+    every time someone improves their column mapping.
 
     `row` is expected to be one of validate_and_convert_rows' output
     dicts (a converted, valid row) -- called once per row, after
@@ -502,9 +508,6 @@ def compute_fingerprint(business_id: str, row: dict) -> str:
         str(row["quantity"]),
         str(row["selling_price"]),
         str(row.get("cost_price") or ""),
-        (row.get("category") or "").strip().lower(),
-        (row.get("customer") or "").strip().lower(),
-        (row.get("payment_method") or "").strip().lower(),
     ]
     canonical = "|".join(parts)
     return hashlib.sha256(canonical.encode()).hexdigest()
