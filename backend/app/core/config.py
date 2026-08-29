@@ -42,6 +42,33 @@ class Settings(BaseSettings):
     # with tool-calling support.)
     GROQ_MODEL: str = "openai/gpt-oss-120b"
 
+    # --- Google Sheets integration (Step 9) ---
+    # Empty by default so local/dev/test setups without Google Cloud
+    # credentials still boot; the /google/connect route raises a clear
+    # 503 if a request reaches it with these unset. Get these from a
+    # Google Cloud project's OAuth 2.0 Client (APIs & Services >
+    # Credentials) with the Sheets API and Drive API enabled.
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    # Must exactly match a redirect URI registered on the OAuth client in
+    # Google Cloud Console, and must point at this backend's own
+    # /google/callback route (not the frontend) -- Google redirects the
+    # user's browser here directly with the auth code.
+    GOOGLE_REDIRECT_URI: str = ""
+    # Fernet key (32 url-safe base64-encoded bytes) used to encrypt
+    # Google access/refresh tokens at rest -- never store them in plain
+    # text. Generate one with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # Rotating this key invalidates every stored token (users would need
+    # to reconnect), so treat it like SECRET_KEY: set once, keep it secret,
+    # back it up.
+    GOOGLE_TOKEN_ENCRYPTION_KEY: str = ""
+
+    # Where to send the user's browser back to after the OAuth callback
+    # finishes (success or failure) -- the frontend's settings/integration
+    # page, not this backend.
+    FRONTEND_URL: str = "http://localhost:3000"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
