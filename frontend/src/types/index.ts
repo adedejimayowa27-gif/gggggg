@@ -245,3 +245,32 @@ export interface SimulationListItem {
   baseline_end_date: string;
   created_at: string;
 }
+
+// --- Alerts -------------------------------------------------------------
+//
+// Mirrors backend/app/schemas/alert.py.
+
+export type AlertSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type AlertStatus = "unread" | "read" | "dismissed" | "resolved";
+
+export interface AlertListItem {
+  id: string;
+  alert_type: string;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+  affected_product: string | null;
+  affected_category: string | null;
+  affected_metric: string | null;
+  status: AlertStatus;
+  created_at: string;
+}
+
+export interface Alert extends AlertListItem {
+  business_id: string;
+  related_transaction_id: string | null;
+  period_start: string;
+  period_end: string;
+  supporting_values: Record<string, unknown>;
+  resolved_at: string | null;
+}
