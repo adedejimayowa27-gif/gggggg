@@ -25,6 +25,7 @@ skips entirely rather than guessing -- always stated in supporting_values
 so it's never ambiguous which method produced an alert.
 """
 import statistics
+import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -726,3 +727,74 @@ DETECTORS: dict[str, Callable[..., list[AlertCandidate]]] = {
     "stock_shortage": detect_stock_shortage,
     "forecast_revenue_decline": detect_forecast_revenue_decline,
 }
+
+
+def run_all_detectors(db: Session, business: Business, today: date | None = None) -> list["Alert"]:
+    """
+    The orchestrator (Batch 8.4): runs every registered detector for one
+    business, skips any candidate whose dedupe_key already exists for
+    this business (requirement #5 -- prevents duplicate/repeated alerts
+    for the same event, regardless of the existing alert's status: a
+    dismissed alert for the exact same detected event should not be
+    recreated the next time detection runs), and persists the rest as
+    new Alert rows with status "unread".
+
+    One detector raising an exception never blocks the others -- each is
+    wrapped individually so a bug or edge case in, say, the outlier
+    detector can't silently prevent the margin detector from ever
+    running for this business.
+    """
+    # Local import avoids a hard import-time dependency from this pure
+    # calculation module on the ORM model -- consistent with
+    # scenario_engine.py not importing Simulation either.
+    import logging
+
+    from app.models.alert import Alert
+
+    logger = logging.getLogger(__name__)
+
+    existing_keys = {
+        row[0]
+        for row in db.query(Alert.dedupe_key).filter(Alert.business_id == business.id).all()
+    }
+
+    created: list[Alert] = []
+    for alert_type, detector in DETECTORS.items():
+        try:
+            candidates = detector(db, business, today=today)
+        except Exception:  # noqa: BLE001 -- one bad detector must not block the rest
+            logger.exception("Alert detector %r failed for business %s", alert_type, business.id)
+            continue
+
+        for candidate in candidates:
+            if candidate.dedupe_key in existing_keys:
+                continue
+            alert = Alert(
+                id=uuid.uuid4(),
+                business_id=business.id,
+                alert_type=candidate.alert_type,
+                severity=candidate.severity,
+                title=candidate.title,
+                message=candidate.message,
+                affected_product=candidate.affected_product,
+                affected_category=candidate.affected_category,
+                affected_metric=candidate.affected_metric,
+                related_transaction_id=(
+                    uuid.UUID(candidate.related_transaction_id)
+                    if candidate.related_transaction_id
+                    else None
+                ),
+                period_start=candidate.period_start,
+                period_end=candidate.period_end,
+                supporting_values=candidate.supporting_values,
+                status="unread",
+                dedupe_key=candidate.dedupe_key,
+            )
+            db.add(alert)
+            created.append(alert)
+            existing_keys.add(candidate.dedupe_key)  # guards against two detectors emitting the same key in one run
+
+    db.commit()
+    for alert in created:
+        db.refresh(alert)
+    return created
