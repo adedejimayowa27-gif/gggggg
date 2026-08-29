@@ -12,6 +12,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Overview", href: "/dashboard", enabled: true },
+  { label: "Alerts", href: "/dashboard/alerts", enabled: true },
   { label: "Transactions", href: "/dashboard/transactions", enabled: true },
   { label: "Products", href: "/dashboard/products", enabled: true },
   { label: "Analytics", href: "/dashboard/analytics", enabled: true },
