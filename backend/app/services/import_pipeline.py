@@ -10,6 +10,7 @@ needs to produce the same (headers, rows) shape to reuse everything
 below.
 """
 import csv
+import hashlib
 import io
 import re
 from decimal import Decimal, InvalidOperation
@@ -468,3 +469,42 @@ def validate_and_convert_rows(
             valid_rows.append(converted)
 
     return valid_rows, row_errors
+
+
+def compute_fingerprint(business_id: str, row: dict) -> str:
+    """
+    Stable SHA-256 hash identifying "this transaction" for duplicate
+    detection (Step 9, requirement #7) -- additive, new function, not a
+    change to validate_and_convert_rows or any existing behavior.
+
+    Built from every field that describes what actually happened (date,
+    product, quantity, prices, category/customer/payment_method) plus
+    business_id, so two different businesses recording an identical sale
+    never collide, and the same sale imported twice -- whether re-run
+    from the same file or re-read from an unchanged spreadsheet row --
+    always produces the same fingerprint.
+
+    Deliberately excludes anything about *how* the row was imported
+    (which file, which import_session, which sync) -- fingerprinting the
+    transaction's own content, not its provenance, is what makes it
+    possible to recognize "this row already exists" across repeated
+    syncs of a spreadsheet that may reorder or partially overlap each
+    time.
+
+    `row` is expected to be one of validate_and_convert_rows' output
+    dicts (a converted, valid row) -- called once per row, after
+    validation, by whichever route persists the Transaction.
+    """
+    parts = [
+        str(business_id),
+        row["date"].isoformat(),
+        row["product"].strip().lower(),
+        str(row["quantity"]),
+        str(row["selling_price"]),
+        str(row.get("cost_price") or ""),
+        (row.get("category") or "").strip().lower(),
+        (row.get("customer") or "").strip().lower(),
+        (row.get("payment_method") or "").strip().lower(),
+    ]
+    canonical = "|".join(parts)
+    return hashlib.sha256(canonical.encode()).hexdigest()
