@@ -53,3 +53,42 @@ class WorksheetOut(BaseModel):
 class SelectionIn(BaseModel):
     spreadsheet_id: str = Field(..., min_length=1)
     worksheet_title: str = Field(..., min_length=1)
+
+
+class SheetPreviewOut(BaseModel):
+    """
+    Response for GET .../google/preview -- same idea as
+    ImportPreviewOut (Step 6's file upload), but nothing is persisted
+    yet: this just shows what the currently-selected worksheet looks
+    like right now, so the user can review/correct the mapping before
+    saving it.
+    """
+
+    detected_columns: list[str]
+    suggested_mapping: dict[str, str | None]
+    preview_rows: list[dict]
+    total_row_count: int
+
+
+class MappingIn(BaseModel):
+    mapping: dict[str, str | None]
+
+
+class SyncRowError(BaseModel):
+    row_number: int
+    errors: list[str]
+
+
+class SyncResultOut(BaseModel):
+    """Response for POST .../google/sync -- requirement #9's success/error/import summary."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    status: str
+    total_row_count: int
+    imported_row_count: int
+    skipped_duplicate_count: int
+    failed_row_count: int
+    row_errors: list[SyncRowError]
+    synced_at: datetime
