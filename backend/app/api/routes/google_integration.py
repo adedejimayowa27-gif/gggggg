@@ -1,11 +1,14 @@
 """
-Google integration routes (Step 9, Batch 9.1).
+Google integration routes (Step 9).
 
-/connect and /status and DELETE are normal authenticated, business-owned
-routes. /callback is the one exception: Google redirects the user's
-browser here directly with no Authorization header, so it can't be
-behind get_owned_business -- see app.services.google_oauth's module
-docstring for how the signed `state` parameter covers that instead.
+/connect and /status and DELETE (Batch 9.1) are normal authenticated,
+business-owned routes. /callback is the one exception: Google redirects
+the user's browser here directly with no Authorization header, so it
+can't be behind get_owned_business -- see app.services.google_oauth's
+module docstring for how the signed `state` parameter covers that
+instead. /spreadsheets, /spreadsheets/{id}/worksheets, and /selection
+(Batch 9.2) let the user pick which sheet/tab to import from once
+connected.
 """
 import uuid
 
@@ -13,21 +16,29 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_owned_business
+from app.api.deps import get_connected_google_integration, get_owned_business
 from app.core.config import settings
 from app.core.exceptions import NotFoundError
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.google_integration import GoogleIntegration
-from app.schemas.google_integration import GoogleConnectOut, GoogleIntegrationStatusOut
+from app.schemas.google_integration import (
+    GoogleConnectOut,
+    GoogleIntegrationStatusOut,
+    SelectionIn,
+    SpreadsheetOut,
+    WorksheetOut,
+)
 from app.services.google_oauth import (
     exchange_code_for_tokens,
     get_authorization_url,
     get_user_email,
+    get_valid_access_token,
     revoke_and_delete,
     save_integration,
     verify_oauth_state,
 )
+from app.services.google_sheets import get_spreadsheet_title, list_spreadsheets, list_worksheets
 
 router = APIRouter(prefix="/businesses/{business_id}/google", tags=["google-integration"])
 
@@ -80,7 +91,52 @@ def disconnect_google(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    integration = db.query(GoogleIntegration).filter(GoogleIntegration.business_id == business.id).first()
-    if not integration:
-        raise NotFoundError("No Google connection found for this business.")
+    integration = get_connected_google_integration(business, db)
     revoke_and_delete(db, integration)
+
+
+@router.get("/spreadsheets", response_model=list[SpreadsheetOut])
+def get_spreadsheets(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Spreadsheets the connected Google account can see, for the user to pick from."""
+    integration = get_connected_google_integration(business, db)
+    access_token = get_valid_access_token(db, integration)
+    return [SpreadsheetOut(**s) for s in list_spreadsheets(access_token)]
+
+
+@router.get("/spreadsheets/{spreadsheet_id}/worksheets", response_model=list[WorksheetOut])
+def get_worksheets(
+    spreadsheet_id: str,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Worksheet (tab) titles within one chosen spreadsheet."""
+    integration = get_connected_google_integration(business, db)
+    access_token = get_valid_access_token(db, integration)
+    return [WorksheetOut(**w) for w in list_worksheets(access_token, spreadsheet_id)]
+
+
+@router.put("/selection", response_model=GoogleIntegrationStatusOut)
+def set_selection(
+    payload: SelectionIn,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """
+    Saves which spreadsheet + worksheet this business will sync from.
+    Fetches the spreadsheet's current title from Google (rather than
+    trusting a client-supplied name) so what's stored always matches
+    what the connected account actually sees it as.
+    """
+    integration = get_connected_google_integration(business, db)
+    access_token = get_valid_access_token(db, integration)
+    spreadsheet_name = get_spreadsheet_title(access_token, payload.spreadsheet_id)
+
+    integration.spreadsheet_id = payload.spreadsheet_id
+    integration.spreadsheet_name = spreadsheet_name
+    integration.worksheet_title = payload.worksheet_title
+    db.commit()
+    db.refresh(integration)
+    return GoogleIntegrationStatusOut.model_validate(integration)
