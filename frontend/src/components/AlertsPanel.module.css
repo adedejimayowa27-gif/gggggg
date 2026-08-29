@@ -1,0 +1,163 @@
+.panel {
+  background: #11151d;
+  border: 1px solid #1f2532;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  color: var(--foreground);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.header h2 {
+  font-size: 1.1rem;
+  color: var(--foreground);
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.statusSelect {
+  background: #0f1420;
+  color: var(--foreground);
+  border: 1px solid #1f2532;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.runButton {
+  padding: 0.4rem 0.9rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.runButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.75rem;
+  border: 1px solid #1f2532;
+  border-radius: 0.5rem;
+}
+
+.severityDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+}
+
+.severity_CRITICAL {
+  background: #ff4d4f;
+}
+
+.severity_HIGH {
+  background: #ff7a45;
+}
+
+.severity_MEDIUM {
+  background: #ffc53d;
+}
+
+.severity_LOW {
+  background: #8a92a6;
+}
+
+.itemBody {
+  flex: 1;
+}
+
+.itemTitleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.itemTitleRow strong {
+  color: var(--foreground);
+  font-size: 0.95rem;
+}
+
+.severityLabel {
+  font-size: 0.7rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.itemMessage {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  line-height: 1.5;
+}
+
+.itemMeta {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-top: 0.35rem;
+  text-transform: capitalize;
+}
+
+.itemActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.itemActions button {
+  background: transparent;
+  border: 1px solid #1f2532;
+  color: var(--muted);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.itemActions button:hover {
+  color: var(--foreground);
+  border-color: var(--accent);
+}
