@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files"
 SHEETS_SPREADSHEET_ENDPOINT = "https://sheets.googleapis.com/v4/spreadsheets"
 
+# Matches import_pipeline.MAX_ROWS's spirit -- a generous cap on how many
+# rows one sync reads (plus header-row headroom), not a hard product limit.
+MAX_SHEET_ROWS = 5020
+
 
 def _get(url: str, access_token: str, params: dict | None = None) -> dict:
     try:
@@ -97,3 +101,29 @@ def get_spreadsheet_title(access_token: str, spreadsheet_id: str) -> str:
         params={"fields": "properties.title"},
     )
     return data["properties"]["title"]
+
+
+def fetch_sheet_values(access_token: str, spreadsheet_id: str, worksheet_title: str) -> list[list]:
+    """
+    Raw cell values for one worksheet, as a list of rows (each a list of
+    cell values) -- exactly the shape app.services.import_pipeline's
+    header-detection already expects, since it was written to operate on
+    plain nested lists regardless of source (see that module's
+    _detect_header_row).
+
+    Deliberately does NOT request valueRenderOption=UNFORMATTED_VALUE.
+    The default (FORMATTED_VALUE) returns what the user actually sees --
+    "1/15/2026", "1,234.50" -- which is exactly what
+    import_pipeline._parse_date_value (pandas' date parser) and
+    _parse_decimal_value (which already strips currency symbols/commas)
+    expect. UNFORMATTED_VALUE would instead return dates as Google
+    Sheets' internal serial-number epoch, which pandas would silently
+    misinterpret as a nanosecond-based Unix timestamp -- a wrong date
+    with no error, rather than a clean parse failure. Worksheet titles
+    are quoted in the range (A1 notation requires this for any title
+    containing spaces or other special characters).
+    """
+    quoted_title = worksheet_title.replace("'", "''")
+    range_a1 = f"'{quoted_title}'!A1:ZZ{MAX_SHEET_ROWS}"
+    data = _get(f"{SHEETS_SPREADSHEET_ENDPOINT}/{spreadsheet_id}/values/{range_a1}", access_token)
+    return data.get("values", [])
