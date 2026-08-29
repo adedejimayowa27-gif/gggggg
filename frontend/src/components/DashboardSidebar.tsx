@@ -18,7 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Analytics", href: "/dashboard/analytics", enabled: true },
   { label: "Simulator", href: "/dashboard/simulator", enabled: true },
   { label: "AI Assistant", href: "/dashboard/ai-assistant", enabled: true },
-  { label: "Settings", href: "/dashboard/settings", enabled: false },
+  { label: "Settings", href: "/dashboard/settings", enabled: true },
 ];
 
 interface Props {
