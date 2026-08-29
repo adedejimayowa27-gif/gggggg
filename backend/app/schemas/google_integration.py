@@ -7,7 +7,7 @@ enforces requirement #2 at the API boundary, not just at the model layer.
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GoogleConnectOut(BaseModel):
@@ -35,3 +35,21 @@ class GoogleIntegrationStatusOut(BaseModel):
     last_synced_at: datetime | None
     last_sync_error: str | None
     created_at: datetime
+
+
+class SpreadsheetOut(BaseModel):
+    id: str
+    name: str
+    modified_time: str | None = None
+
+
+class WorksheetOut(BaseModel):
+    title: str
+    sheet_id: int
+    row_count: int | None = None
+    column_count: int | None = None
+
+
+class SelectionIn(BaseModel):
+    spreadsheet_id: str = Field(..., min_length=1)
+    worksheet_title: str = Field(..., min_length=1)
