@@ -201,6 +201,7 @@ def get_user_email(access_token: str) -> str:
     except httpx.HTTPError as exc:
         raise GoogleIntegrationError("Could not reach Google to confirm the connected account.") from exc
     if response.status_code != 200:
+        logger.warning("Google userinfo endpoint returned %s: %s", response.status_code, response.text)
         raise GoogleIntegrationError("Could not confirm which Google account was connected.")
     email = response.json().get("email")
     if not email:
@@ -227,6 +228,10 @@ def save_integration(db: Session, business: Business, tokens: dict, email: str) 
         else (existing.encrypted_refresh_token if existing else None)
     )
     if not encrypted_refresh:
+        logger.warning(
+            "Google did not return a refresh_token for business %s (tokens keys: %s)",
+            business.id, list(tokens.keys()),
+        )
         raise GoogleIntegrationError(
             "Google didn't grant offline access on this connection. Please try connecting again."
         )
