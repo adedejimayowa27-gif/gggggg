@@ -143,3 +143,26 @@
   color: var(--muted);
   font-size: 0.8rem;
 }
+
+.savedList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.branchRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #1f2532;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.defaultTag {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
