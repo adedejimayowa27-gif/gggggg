@@ -80,9 +80,20 @@ export default function SettingsPage() {
 
   const handleConnect = () => {
     if (!token || !primaryBusiness) return;
-    connectGoogle(primaryBusiness.id, token).then((res) => {
-      window.location.href = res.authorization_url;
-    });
+    setError(null);
+    setIsBusy(true);
+    connectGoogle(primaryBusiness.id, token)
+      .then((res) => {
+        window.location.href = res.authorization_url;
+      })
+      .catch((err) => {
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "Could not start Google connection. Please try again."
+        );
+        setIsBusy(false);
+      });
   };
 
   const handleDisconnect = () => {
@@ -180,8 +191,8 @@ export default function SettingsPage() {
             <p className={styles.muted}>
               Connect a Google account to import transactions directly from a spreadsheet.
             </p>
-            <button className={styles.primaryButton} onClick={handleConnect}>
-              Connect Google Account
+            <button className={styles.primaryButton} onClick={handleConnect} disabled={isBusy}>
+              {isBusy ? "Connecting…" : "Connect Google Account"}
             </button>
           </>
         )}
