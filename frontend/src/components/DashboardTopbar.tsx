@@ -10,7 +10,7 @@ interface Props {
 
 export default function DashboardTopbar({ onMenuToggle }: Props) {
   const { user, logout } = useAuth();
-  const { primaryBusiness, isLoadingBusinesses } = useDashboard();
+  const { businesses, primaryBusiness, isLoadingBusinesses, selectBusiness } = useDashboard();
 
   return (
     <header className={styles.topbar}>
@@ -23,15 +23,26 @@ export default function DashboardTopbar({ onMenuToggle }: Props) {
           <span className={styles.menuIcon} />
         </button>
 
-        <div className={styles.businessName}>
-          {isLoadingBusinesses ? (
-            <span className={styles.placeholder}>Loading…</span>
-          ) : primaryBusiness ? (
-            primaryBusiness.name
-          ) : (
-            <span className={styles.placeholder}>No business yet</span>
-          )}
-        </div>
+        {isLoadingBusinesses ? (
+          <span className={styles.placeholder}>Loading…</span>
+        ) : !primaryBusiness ? (
+          <span className={styles.placeholder}>No business yet</span>
+        ) : businesses.length > 1 ? (
+          <select
+            className={styles.businessSwitcher}
+            value={primaryBusiness.id}
+            onChange={(e) => selectBusiness(e.target.value)}
+            aria-label="Switch business"
+          >
+            {businesses.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className={styles.businessName}>{primaryBusiness.name}</div>
+        )}
       </div>
 
       <div className={styles.right}>
