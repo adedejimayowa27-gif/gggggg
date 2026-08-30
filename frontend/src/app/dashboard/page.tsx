@@ -36,7 +36,7 @@ function formatNumber(value: string | number): string {
 
 export default function OverviewPage() {
   const { token } = useAuth();
-  const { businesses, primaryBusiness, isLoadingBusinesses, refreshBusinesses } = useDashboard();
+  const { businesses, primaryBusiness, isLoadingBusinesses, refreshBusinesses, selectBusiness } = useDashboard();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [name, setName] = useState("");
@@ -81,7 +81,7 @@ export default function OverviewPage() {
     setFormError(null);
     setIsCreating(true);
     try {
-      await apiFetch<Business>("/businesses", {
+      const created = await apiFetch<Business>("/businesses", {
         method: "POST",
         authToken: token,
         body: JSON.stringify({ name, industry: industry || undefined }),
@@ -90,6 +90,7 @@ export default function OverviewPage() {
       setIndustry("");
       setShowCreateForm(false);
       await refreshBusinesses();
+      selectBusiness(created.id);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Could not create business.");
     } finally {
