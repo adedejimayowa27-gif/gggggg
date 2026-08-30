@@ -21,6 +21,7 @@ import {
   saveMapping,
   saveSelection,
 } from "@/lib/google";
+import { createBranch, deleteBranch, listBranches } from "@/lib/branches";
 import {
   STANDARD_FIELDS,
   type GoogleIntegrationStatus,
@@ -29,6 +30,7 @@ import {
   type StandardField,
   type SyncResult,
   type WorksheetItem,
+  type Branch,
 } from "@/types";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./settings.module.css";
@@ -64,6 +66,35 @@ export default function SettingsPage() {
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [newBranchName, setNewBranchName] = useState("");
+  const [branchError, setBranchError] = useState<string | null>(null);
+
+  const loadBranches = () => {
+    if (!token || !primaryBusiness) return;
+    listBranches(primaryBusiness.id, token)
+      .then(setBranches)
+      .catch(() => undefined);
+  };
+
+  useEffect(loadBranches, [token, primaryBusiness]);
+
+  const handleAddBranch = () => {
+    if (!token || !primaryBusiness || !newBranchName.trim()) return;
+    setBranchError(null);
+    createBranch(primaryBusiness.id, { name: newBranchName.trim() }, token)
+      .then(() => {
+        setNewBranchName("");
+        loadBranches();
+      })
+      .catch((err) => setBranchError(err instanceof ApiError ? err.message : "Could not add branch."));
+  };
+
+  const handleDeleteBranch = (branchId: string) => {
+    if (!token || !primaryBusiness) return;
+    deleteBranch(primaryBusiness.id, branchId, token).then(loadBranches);
+  };
 
   const loadStatus = () => {
     if (!token || !primaryBusiness) return;
@@ -332,6 +363,41 @@ export default function SettingsPage() {
         )}
 
         {error && <p className={styles.error}>{error}</p>}
+      </div>
+
+      <div className={styles.card}>
+        <h2>Branches</h2>
+        <p className={styles.muted}>
+          Optional -- organize this business&apos;s activity by location if it has more than one.
+        </p>
+
+        {branches.length === 0 && <p className={styles.muted}>No branches yet.</p>}
+        <ul className={styles.savedList}>
+          {branches.map((b) => (
+            <li key={b.id} className={styles.branchRow}>
+              <span>
+                {b.name}
+                {b.is_default && <span className={styles.defaultTag}> (default)</span>}
+              </span>
+              <button className={styles.linkButton} onClick={() => handleDeleteBranch(b.id)}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        <div className={styles.formRow}>
+          <input
+            type="text"
+            placeholder="New branch name"
+            value={newBranchName}
+            onChange={(e) => setNewBranchName(e.target.value)}
+          />
+          <button className={styles.primaryButton} onClick={handleAddBranch}>
+            Add branch
+          </button>
+        </div>
+        {branchError && <p className={styles.error}>{branchError}</p>}
       </div>
     </div>
   );
