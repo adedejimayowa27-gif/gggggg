@@ -63,6 +63,17 @@
   white-space: nowrap;
 }
 
+.businessSwitcher {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--foreground);
+  background: transparent;
+  border: 1px solid #1f2430;
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  max-width: 220px;
+}
+
 .placeholder {
   color: var(--muted);
   font-weight: 500;
