@@ -66,6 +66,15 @@ class Transaction(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    # Batch 10.1: which branch (if any) this sale is attributed to.
+    # Nullable -- a business that doesn't use branches, or a transaction
+    # imported before this feature existed, simply has no branch, and
+    # every existing query/report continues to work at the whole-business
+    # level exactly as before.
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("branches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     business: Mapped["Business"] = relationship("Business", back_populates="transactions")
     import_session: Mapped["ImportSession | None"] = relationship(
         "ImportSession", back_populates="transactions"
