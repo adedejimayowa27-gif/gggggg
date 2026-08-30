@@ -329,3 +329,17 @@ export interface SyncResult {
   row_errors: SyncRowError[];
   synced_at: string;
 }
+
+// --- Branches -------------------------------------------------------------
+//
+// Mirrors backend/app/schemas/branch.py.
+
+export interface Branch {
+  id: string;
+  business_id: string;
+  name: string;
+  address: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
