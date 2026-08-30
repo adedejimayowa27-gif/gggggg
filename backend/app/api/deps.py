@@ -20,6 +20,7 @@ from app.models.chat_conversation import ChatConversation
 from app.models.simulation import Simulation
 from app.models.alert import Alert
 from app.models.google_integration import GoogleIntegration
+from app.models.branch import Branch
 from app.models.user import User
 
 # tokenUrl is only used by the OpenAPI docs UI to know where to fetch a token from.
@@ -131,3 +132,11 @@ def get_connected_google_integration(business: Business, db: Session) -> GoogleI
     if not integration:
         raise NotFoundError("No Google account is connected for this business yet.")
     return integration
+
+
+def get_owned_branch(branch_id: uuid.UUID, business: Business, db: Session) -> Branch:
+    """Fetch a branch scoped to an already-ownership-checked business."""
+    branch = db.query(Branch).filter(Branch.id == branch_id, Branch.business_id == business.id).first()
+    if not branch:
+        raise NotFoundError("Branch not found.")
+    return branch
