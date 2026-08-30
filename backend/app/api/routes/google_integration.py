@@ -10,6 +10,7 @@ instead. /spreadsheets, /spreadsheets/{id}/worksheets, and /selection
 (Batch 9.2) let the user pick which sheet/tab to import from once
 connected.
 """
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, Query
@@ -51,6 +52,8 @@ router = APIRouter(prefix="/businesses/{business_id}/google", tags=["google-inte
 # business_id segment) -- kept in this same file since it's the other
 # half of the same OAuth flow.
 callback_router = APIRouter(prefix="/google", tags=["google-integration"])
+
+logger = logging.getLogger(__name__)
 
 
 def _to_status_out(integration: GoogleIntegration) -> GoogleIntegrationStatusOut:
@@ -97,6 +100,7 @@ def google_callback(
         email = get_user_email(tokens["access_token"])
         save_integration(db, business, tokens, email)
     except Exception:  # noqa: BLE001 -- any failure in this flow redirects with an error flag, never a raw error response
+        logger.exception("Google OAuth callback failed for business_id=%s", locals().get("business_id"))
         return RedirectResponse(f"{settings.FRONTEND_URL}/dashboard/settings?google=error")
 
     return RedirectResponse(f"{settings.FRONTEND_URL}/dashboard/settings?google=connected")
