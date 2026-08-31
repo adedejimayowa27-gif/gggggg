@@ -44,6 +44,10 @@ def invite_member(db: Session, business: Business, invited_by: User, email: str,
     if role == "owner":
         raise ValidationError("There can only be one owner -- invite as admin instead.")
 
+    from app.services.billing import check_max_team_members  # local import avoids a circular import
+
+    check_max_team_members(db, business)
+
     normalized_email = email.strip().lower()
     existing = (
         db.query(TeamMember)
