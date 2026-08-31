@@ -15,6 +15,7 @@ from app.db.session import get_db
 from app.models.branch import Branch
 from app.models.business import Business
 from app.schemas.branch import BranchCreate, BranchOut, BranchUpdate
+from app.services.billing import check_max_branches
 
 router = APIRouter(prefix="/businesses/{business_id}/branches", tags=["branches"])
 
@@ -33,6 +34,8 @@ def create_branch(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
+    check_max_branches(db, business)
+
     branch = Branch(
         id=uuid.uuid4(),
         business_id=business.id,
