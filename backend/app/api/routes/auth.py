@@ -16,6 +16,7 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import Token, UserCreate, UserLogin, UserOut
+from app.services.team import link_pending_invites
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,6 +35,10 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # Batch 10.2: activates any team invite(s) made to this email before
+    # the account existed. Safe/cheap even when there are none.
+    link_pending_invites(db, user)
 
     token = create_access_token(subject=str(user.id))
     return Token(access_token=token, user=UserOut.model_validate(user))
