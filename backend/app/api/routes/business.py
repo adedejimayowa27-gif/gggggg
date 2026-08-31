@@ -15,6 +15,7 @@ from app.models.business import Business
 from app.models.user import User
 from app.schemas.business import BusinessCreate, BusinessOut
 from app.services.team import create_owner_membership, get_user_businesses
+from app.services.billing import check_max_businesses, create_free_subscription
 
 router = APIRouter(prefix="/businesses", tags=["businesses"])
 
@@ -25,14 +26,17 @@ def create_business(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    check_max_businesses(db, current_user)
+
     business = Business(
         name=payload.name,
         industry=payload.industry,
         owner_id=current_user.id,
     )
     db.add(business)
-    db.flush()  # assigns business.id before the membership row references it
+    db.flush()  # assigns business.id before the membership/subscription rows reference it
     create_owner_membership(db, business, current_user)
+    create_free_subscription(db, business)
     db.commit()
     db.refresh(business)
     return BusinessOut.model_validate(business)
