@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_connected_google_integration, get_owned_business
+from app.api.deps import get_connected_google_integration, get_owned_business, require_business_role
 from app.core.config import settings
 from app.core.exceptions import NotFoundError
 from app.db.session import get_db
@@ -120,7 +120,7 @@ def get_google_status(
 @router.delete("", status_code=204)
 def disconnect_google(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     integration = get_connected_google_integration(business, db)
     revoke_and_delete(db, integration)
