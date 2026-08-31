@@ -69,6 +69,18 @@ class Settings(BaseSettings):
     # page, not this backend.
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # --- Billing (Step 10) ---
+    # Empty by default so this app boots and runs fully without a Stripe
+    # account -- every business is simply on the free plan (see
+    # alembic/versions/0012_billing.py). Billing routes that need Stripe
+    # raise a clear 503 if these are unset, same pattern as Groq/Google.
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    # Verifies that a webhook request genuinely came from Stripe (not
+    # forged) -- get this from the webhook endpoint's settings in the
+    # Stripe dashboard once one is created.
+    STRIPE_WEBHOOK_SECRET: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
