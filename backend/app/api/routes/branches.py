@@ -10,7 +10,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_owned_branch, get_owned_business
+from app.api.deps import get_owned_branch, get_owned_business, require_business_role
 from app.db.session import get_db
 from app.models.branch import Branch
 from app.models.business import Business
@@ -88,7 +88,7 @@ def update_branch(
 def delete_branch(
     branch_id: uuid.UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """
     Deleting a branch never deletes its transactions -- branch_id on
