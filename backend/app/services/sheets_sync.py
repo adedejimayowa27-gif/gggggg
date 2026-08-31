@@ -31,6 +31,7 @@ from app.services.google_oauth import get_valid_access_token
 from app.services.google_sheets import fetch_sheet_values
 from app.services.import_pipeline import compute_fingerprint, suggest_mapping, validate_and_convert_rows
 from app.services.sheets_import import parse_sheet_values
+from app.services.billing import check_max_transactions_this_month
 
 
 def _require_selection(integration: GoogleIntegration) -> None:
@@ -77,6 +78,7 @@ def sync_now(db: Session, business: Business, integration: GoogleIntegration) ->
         raise ValidationError(
             "No column mapping has been saved yet. Preview the sheet and save a mapping before syncing."
         )
+    check_max_transactions_this_month(db, business)
 
     try:
         access_token = get_valid_access_token(db, integration)
