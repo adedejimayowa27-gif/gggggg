@@ -14,6 +14,7 @@ from app.db.session import get_db
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.business import BusinessCreate, BusinessOut
+from app.services.team import create_owner_membership, get_user_businesses
 
 router = APIRouter(prefix="/businesses", tags=["businesses"])
 
@@ -30,6 +31,8 @@ def create_business(
         owner_id=current_user.id,
     )
     db.add(business)
+    db.flush()  # assigns business.id before the membership row references it
+    create_owner_membership(db, business, current_user)
     db.commit()
     db.refresh(business)
     return BusinessOut.model_validate(business)
@@ -40,12 +43,13 @@ def list_businesses(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    businesses = (
-        db.query(Business)
-        .filter(Business.owner_id == current_user.id)
-        .order_by(Business.created_at.desc())
-        .all()
-    )
+    """
+    Every business this user can access -- their own, plus any they've
+    been added to as a team member (Batch 10.2). Before this batch, a
+    team member could open a business directly by ID but it would never
+    show up in their own list -- that's fixed here.
+    """
+    businesses = get_user_businesses(db, current_user)
     return [BusinessOut.model_validate(b) for b in businesses]
 
 
