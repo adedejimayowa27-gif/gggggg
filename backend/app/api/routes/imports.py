@@ -17,6 +17,7 @@ from app.db.session import get_db
 from app.models.business import Business
 from app.models.import_session import ImportSession
 from app.models.transaction import Transaction
+from app.services.billing import check_max_transactions_this_month
 from app.schemas.import_session import (
     ImportConfirmIn,
     ImportConfirmOut,
@@ -96,6 +97,8 @@ def confirm_import(
             f"This import has already been {import_session.status} and cannot be confirmed again.",
             code="already_processed",
         )
+
+    check_max_transactions_this_month(db, business)
 
     valid_rows, row_errors = validate_and_convert_rows(
         import_session.raw_rows, payload.mapping
