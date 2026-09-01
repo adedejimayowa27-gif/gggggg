@@ -13,16 +13,18 @@ connected.
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_connected_google_integration, get_owned_business, require_business_role
+from app.api.deps import get_current_user, get_connected_google_integration, get_owned_business, require_business_role
 from app.core.config import settings
 from app.core.exceptions import NotFoundError
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.google_integration import GoogleIntegration
+from app.models.user import User
+from app.services.audit import client_ip, log_action
 from app.schemas.google_integration import (
     GoogleConnectOut,
     GoogleIntegrationStatusOut,
@@ -80,7 +82,16 @@ def _to_status_out(integration: GoogleIntegration) -> GoogleIntegrationStatusOut
 
 
 @router.get("/connect", response_model=GoogleConnectOut)
-def connect_google(business: Business = Depends(get_owned_business)):
+def connect_google(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_owned_business),
+):
+    log_action(
+        db, "google_integration.connect_initiated", business_id=business.id, actor_user_id=current_user.id,
+        ip_address=client_ip(request),
+    )
     return GoogleConnectOut(authorization_url=get_authorization_url(str(business.id)))
 
 
@@ -103,6 +114,14 @@ def google_callback(
         logger.exception("Google OAuth callback failed for business_id=%s", locals().get("business_id"))
         return RedirectResponse(f"{settings.FRONTEND_URL}/dashboard/settings?google=error")
 
+    # No authenticated user in scope here (Google's redirect carries no
+    # Authorization header) -- logged with business_id only, which is
+    # still enough to know which business's integration this affected.
+    log_action(
+        db, "google_integration.connected", business_id=business.id,
+        details={"google_email": email},
+    )
+
     return RedirectResponse(f"{settings.FRONTEND_URL}/dashboard/settings?google=connected")
 
 
@@ -119,11 +138,18 @@ def get_google_status(
 
 @router.delete("", status_code=204)
 def disconnect_google(
+    request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     business: Business = Depends(require_business_role("admin")),
 ):
     integration = get_connected_google_integration(business, db)
+    disconnected_email = integration.google_email
     revoke_and_delete(db, integration)
+    log_action(
+        db, "google_integration.disconnected", business_id=business.id, actor_user_id=current_user.id,
+        details={"google_email": disconnected_email}, ip_address=client_ip(request),
+    )
 
 
 @router.get("/spreadsheets", response_model=list[SpreadsheetOut])
@@ -207,7 +233,9 @@ def set_mapping(
 
 @router.post("/sync", response_model=SyncResultOut)
 def run_sync(
+    request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     business: Business = Depends(get_owned_business),
 ):
     """
@@ -217,6 +245,16 @@ def run_sync(
     """
     integration = get_connected_google_integration(business, db)
     import_session = sync_now(db, business, integration)
+    log_action(
+        db, "sheets_sync.completed", business_id=business.id, actor_user_id=current_user.id,
+        target_type="import_session", target_id=str(import_session.id),
+        details={
+            "imported_row_count": import_session.imported_row_count,
+            "skipped_duplicate_count": import_session.skipped_duplicate_count,
+            "failed_row_count": import_session.failed_row_count,
+        },
+        ip_address=client_ip(request),
+    )
     return SyncResultOut(
         id=import_session.id,
         status=import_session.status,
