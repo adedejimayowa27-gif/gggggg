@@ -7,14 +7,16 @@ behaves exactly as it always has.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_owned_branch, get_owned_business, require_business_role
+from app.api.deps import get_current_user, get_owned_branch, get_owned_business, require_business_role
 from app.db.session import get_db
 from app.models.branch import Branch
 from app.models.business import Business
+from app.models.user import User
 from app.schemas.branch import BranchCreate, BranchOut, BranchUpdate
+from app.services.audit import client_ip, log_action
 from app.services.billing import check_max_branches
 
 router = APIRouter(prefix="/businesses/{business_id}/branches", tags=["branches"])
@@ -90,7 +92,9 @@ def update_branch(
 @router.delete("/{branch_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_branch(
     branch_id: uuid.UUID,
+    request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     business: Business = Depends(require_business_role("admin")),
 ):
     """
@@ -100,5 +104,11 @@ def delete_branch(
     branch in the first place.
     """
     branch = get_owned_branch(branch_id, business, db)
+    branch_name = branch.name
     db.delete(branch)
     db.commit()
+    log_action(
+        db, "branch.deleted", business_id=business.id, actor_user_id=current_user.id,
+        target_type="branch", target_id=str(branch_id),
+        details={"name": branch_name}, ip_address=client_ip(request),
+    )
