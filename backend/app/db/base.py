@@ -21,3 +21,4 @@ from app.models.branch import Branch  # noqa: F401
 from app.models.team_member import TeamMember  # noqa: F401
 from app.models.plan import Plan  # noqa: F401
 from app.models.subscription import Subscription  # noqa: F401
+from app.models.audit_log import AuditLog  # noqa: F401
