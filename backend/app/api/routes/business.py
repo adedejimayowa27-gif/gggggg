@@ -6,7 +6,7 @@ query/write is scoped to the current user's own businesses. A user should
 never be able to see or modify another user's data, even by guessing an
 ID -- ownership is checked at the query level, not just at creation time.
 """
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_owned_business
@@ -16,6 +16,7 @@ from app.models.user import User
 from app.schemas.business import BusinessCreate, BusinessOut
 from app.services.team import create_owner_membership, get_user_businesses
 from app.services.billing import check_max_businesses, create_free_subscription
+from app.services.audit import client_ip, log_action
 
 router = APIRouter(prefix="/businesses", tags=["businesses"])
 
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/businesses", tags=["businesses"])
 @router.post("", response_model=BusinessOut, status_code=status.HTTP_201_CREATED)
 def create_business(
     payload: BusinessCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -39,6 +41,13 @@ def create_business(
     create_free_subscription(db, business)
     db.commit()
     db.refresh(business)
+
+    log_action(
+        db, "business.created", business_id=business.id, actor_user_id=current_user.id,
+        target_type="business", target_id=str(business.id),
+        details={"name": business.name}, ip_address=client_ip(request),
+    )
+
     return BusinessOut.model_validate(business)
 
 
