@@ -8,15 +8,17 @@ through this router.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_owned_business
+from app.api.deps import get_current_user, get_owned_business
 from app.core.exceptions import AppError, NotFoundError
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.import_session import ImportSession
 from app.models.transaction import Transaction
+from app.models.user import User
+from app.services.audit import client_ip, log_action
 from app.services.billing import check_max_transactions_this_month
 from app.schemas.import_session import (
     ImportConfirmIn,
@@ -87,7 +89,9 @@ async def upload_import_file(
 def confirm_import(
     import_id: uuid.UUID,
     payload: ImportConfirmIn,
+    request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     business: Business = Depends(get_owned_business),
 ):
     import_session = _get_owned_import_session(import_id, business, db)
@@ -129,6 +133,16 @@ def confirm_import(
 
     db.commit()
     db.refresh(import_session)
+
+    log_action(
+        db, "import.completed", business_id=business.id, actor_user_id=current_user.id,
+        target_type="import_session", target_id=str(import_session.id),
+        details={
+            "imported_row_count": import_session.imported_row_count,
+            "failed_row_count": import_session.failed_row_count,
+        },
+        ip_address=client_ip(request),
+    )
 
     return ImportConfirmOut(
         id=import_session.id,
