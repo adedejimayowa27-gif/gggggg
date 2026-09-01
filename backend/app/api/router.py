@@ -6,7 +6,7 @@ simulator, etc.) without touching main.py.
 """
 from fastapi import APIRouter
 
-from app.api.routes import alerts, analytics, assistant, auth, billing, branches, business, chat, google_integration, health, imports, simulations, team, transactions
+from app.api.routes import alerts, analytics, assistant, audit_logs, auth, billing, branches, business, chat, google_integration, health, imports, simulations, team, transactions
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -15,6 +15,7 @@ api_router.include_router(business.router)
 api_router.include_router(branches.router)
 api_router.include_router(team.router)
 api_router.include_router(billing.router)
+api_router.include_router(audit_logs.router)
 api_router.include_router(imports.router)
 api_router.include_router(transactions.router)
 api_router.include_router(analytics.router)
