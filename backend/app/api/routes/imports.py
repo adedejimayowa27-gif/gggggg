@@ -27,6 +27,7 @@ from app.schemas.import_session import (
     ImportSessionOut,
 )
 from app.services.import_pipeline import (
+    MAX_FILE_SIZE_BYTES,
     compute_fingerprint,
     parse_upload,
     suggest_mapping,
@@ -57,7 +58,18 @@ async def upload_import_file(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    file_bytes = await file.read()
+    # Bounded read -- caps how much this handler ever holds in memory
+    # regardless of how large the actual uploaded file is, rather than
+    # buffering the whole thing first and only checking its size
+    # afterward (that check still exists inside parse_upload as a second
+    # layer; this is the first). Reading one byte past the limit is
+    # enough to detect "too large" without needing the true size upfront.
+    file_bytes = await file.read(MAX_FILE_SIZE_BYTES + 1)
+    if len(file_bytes) > MAX_FILE_SIZE_BYTES:
+        raise AppError(
+            f"File too large. Maximum size is {MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB.",
+            code="file_too_large",
+        )
     headers, rows = parse_upload(file_bytes, file.filename or "upload")
     mapping = suggest_mapping(headers)
 
