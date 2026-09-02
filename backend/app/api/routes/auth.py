@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.exceptions import ConflictError, UnauthorizedError
+from app.core.rate_limit import limiter
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models.user import User
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 def signup(payload: UserCreate, request: Request, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
@@ -52,6 +54,7 @@ def signup(payload: UserCreate, request: Request, db: Session = Depends(get_db))
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("10/minute")
 def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
