@@ -73,7 +73,7 @@ class Alert(Base):
     affected_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
     affected_metric: Mapped[str | None] = mapped_column(String(50), nullable=True)
     related_transaction_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True), ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # The historical window the detector's finding is based on.
