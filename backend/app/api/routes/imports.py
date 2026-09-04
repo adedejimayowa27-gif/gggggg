@@ -8,7 +8,7 @@ through this router.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_owned_business
@@ -168,6 +168,7 @@ def confirm_import(
 
 @router.get("", response_model=list[ImportSessionOut])
 def list_import_sessions(
+    limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
@@ -175,6 +176,7 @@ def list_import_sessions(
         db.query(ImportSession)
         .filter(ImportSession.business_id == business.id)
         .order_by(ImportSession.created_at.desc())
+        .limit(limit)
         .all()
     )
     return [ImportSessionOut.model_validate(s) for s in sessions]
