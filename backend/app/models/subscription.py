@@ -31,7 +31,7 @@ class Subscription(Base):
         UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     plan_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("plans.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("plans.id"), nullable=False, index=True
     )
 
     # active | trialing | past_due | canceled -- "active" covers both a
