@@ -34,13 +34,14 @@ def run_alert_detection(
 @router.get("", response_model=list[AlertListItem])
 def list_alerts(
     status: AlertStatus | None = Query(default=None, description="Filter by status."),
+    limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
     query = db.query(Alert).filter(Alert.business_id == business.id)
     if status is not None:
         query = query.filter(Alert.status == status.value)
-    alerts = query.order_by(Alert.created_at.desc()).all()
+    alerts = query.order_by(Alert.created_at.desc()).limit(limit).all()
     return [AlertListItem.model_validate(a) for a in alerts]
 
 
