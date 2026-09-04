@@ -7,7 +7,7 @@ check from get_owned_business. POST /simulate is a live, unsaved preview
 """
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_owned_business, get_owned_simulation
@@ -75,6 +75,7 @@ def create_simulation(
 
 @router.get("/simulations", response_model=list[SimulationListItem])
 def list_simulations(
+    limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
@@ -82,6 +83,7 @@ def list_simulations(
         db.query(Simulation)
         .filter(Simulation.business_id == business.id)
         .order_by(Simulation.created_at.desc())
+        .limit(limit)
         .all()
     )
     return [SimulationListItem.model_validate(s) for s in simulations]
