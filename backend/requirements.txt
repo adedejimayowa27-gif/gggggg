@@ -20,6 +20,7 @@ httpx==0.28.1
 cryptography==46.0.6
 stripe==15.6.0
 slowapi==0.1.10
+apscheduler==3.11.3
 # Range rather than an exact pin: verify/lock the current release for your
 # environment (`pip install openai` then freeze) rather than trusting this
 # one, since it wasn't resolved against a live package index here. Groq's
