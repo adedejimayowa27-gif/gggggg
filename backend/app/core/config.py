@@ -81,6 +81,16 @@ class Settings(BaseSettings):
     # Stripe dashboard once one is created.
     STRIPE_WEBHOOK_SECRET: str = ""
 
+    # --- Background jobs (Step 10, Batch 10.7) ---
+    # In-process scheduler (no separate worker/broker needed) -- correct
+    # for this app's current single Render web service. If ever scaled to
+    # multiple instances, each would run these jobs independently; the
+    # dedupe_key (alerts) and fingerprint (transactions) mechanisms already
+    # in place make redundant runs wasteful but not harmful.
+    ENABLE_BACKGROUND_JOBS: bool = True
+    ALERT_DETECTION_INTERVAL_HOURS: int = 24
+    GOOGLE_SYNC_INTERVAL_HOURS: int = 6
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
