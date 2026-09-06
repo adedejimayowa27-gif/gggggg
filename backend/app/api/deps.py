@@ -13,6 +13,8 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, UnauthorizedError
+from app.core.logging_config import business_id_var, request_id_var, user_id_var
+from app.core.monitoring import set_request_context
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.business import Business
@@ -50,6 +52,13 @@ def get_current_user(
     if not user.is_active:
         raise UnauthorizedError("User account is inactive.")
 
+    # Batch 10.8: stamp the authenticated user onto this request's log
+    # lines and (if configured) Sentry events, from this single choke
+    # point -- every authenticated route already depends on
+    # get_current_user, so no other call site needs to remember to do this.
+    user_id_var.set(str(user.id))
+    set_request_context(request_id_var.get(), str(user.id), business_id_var.get())
+
     return user
 
 
@@ -81,6 +90,7 @@ def get_owned_business(
         raise NotFoundError("Business not found.")
 
     if business.owner_id == current_user.id:
+        business_id_var.set(str(business.id))
         return business
 
     is_active_team_member = (
@@ -93,6 +103,10 @@ def get_owned_business(
         .first()
     )
     if is_active_team_member:
+        # Batch 10.8: stamp business_id onto this request's log lines
+        # only *after* authorization has already succeeded above -- never
+        # stamp an ID the caller wasn't actually allowed to access.
+        business_id_var.set(str(business.id))
         return business
 
     # 404, not 403 -- deliberately doesn't confirm the business exists to
@@ -149,6 +163,7 @@ def require_business_role(minimum_role: str):
         role = get_business_role(business_id, db, current_user)
         if role is None or ROLE_ORDER.get(role, -1) < ROLE_ORDER.get(minimum_role, 0):
             raise NotFoundError("Business not found.")
+        business_id_var.set(str(business.id))
         return business
 
     return _dependency
