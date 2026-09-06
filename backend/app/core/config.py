@@ -91,6 +91,23 @@ class Settings(BaseSettings):
     ALERT_DETECTION_INTERVAL_HOURS: int = 24
     GOOGLE_SYNC_INTERVAL_HOURS: int = 6
 
+    # --- Logging & error monitoring (Step 10, Batch 10.8, requirement #6) ---
+    # "json" for production (one parseable object per line, for whatever
+    # log aggregator reads Render's/your host's stdout); "text" is easier
+    # to read directly in a local `uvicorn --reload` terminal.
+    LOG_FORMAT: str = "json"
+    LOG_LEVEL: str = "INFO"
+    # Empty by default, same pattern as STRIPE_SECRET_KEY/GROQ_API_KEY
+    # above -- the app runs fully without an error-monitoring account;
+    # set this in production to get exception tracking. See
+    # app/core/monitoring.py.
+    SENTRY_DSN: str = ""
+    # Fraction of requests (0.0-1.0) sampled for performance tracing, not
+    # error capture -- errors are always captured regardless of this
+    # value. Kept low by default since Sentry's paid tiers bill per
+    # sampled transaction.
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
