@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -13,6 +13,14 @@ import {
 import styles from "./TransactionImportWizard.module.css";
 
 type Stage = "idle" | "uploading" | "mapping" | "confirming" | "result";
+
+// Batch 10.9: the backend now processes a confirmed import as a
+// background job rather than inline in the confirm request (a large
+// file could otherwise take long enough to risk a gateway timeout).
+// POST .../confirm returns almost immediately with status="queued";
+// this polls GET .../{id} until the job finishes.
+const POLL_INTERVAL_MS = 1500;
+const POLL_TIMEOUT_MS = 2 * 60 * 1000; // generous -- MAX_ROWS=5000 should finish well before this
 
 const FIELD_LABELS: Record<StandardField, string> = {
   date: "Date",
@@ -35,6 +43,14 @@ interface Props {
 export default function TransactionImportWizard({ businessId, onImportComplete }: Props) {
   const { token } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Guards against setState after unmount (e.g. the user navigates away
+  // mid-poll) -- the poll loop checks this before each scheduled step.
+  const unmountedRef = useRef(false);
+  useEffect(() => {
+    return () => {
+      unmountedRef.current = true;
+    };
+  }, []);
 
   const [stage, setStage] = useState<Stage>("idle");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -88,7 +104,7 @@ export default function TransactionImportWizard({ businessId, onImportComplete }
     setError(null);
     setStage("confirming");
     try {
-      const data = await apiFetch<ImportConfirmResult>(
+      await apiFetch<ImportConfirmResult>(
         `/businesses/${businessId}/imports/${preview.id}/confirm`,
         {
           method: "POST",
@@ -96,9 +112,33 @@ export default function TransactionImportWizard({ businessId, onImportComplete }
           body: JSON.stringify({ mapping }),
         }
       );
-      setResult(data);
-      setStage("result");
-      onImportComplete?.();
+
+      // Batch 10.9: the response above only reflects status="queued" --
+      // poll the same import until the background job finishes.
+      const startedAt = Date.now();
+      const poll = async (): Promise<void> => {
+        if (unmountedRef.current) return;
+        if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+          setError(
+            "This import is taking longer than expected. It's still processing in the background -- check the import history shortly."
+          );
+          setStage("mapping");
+          return;
+        }
+        const current = await apiFetch<ImportConfirmResult>(
+          `/businesses/${businessId}/imports/${preview.id}`,
+          { authToken: token }
+        );
+        if (unmountedRef.current) return;
+        if (current.status === "completed" || current.status === "failed") {
+          setResult(current);
+          setStage("result");
+          onImportComplete?.();
+          return;
+        }
+        setTimeout(poll, POLL_INTERVAL_MS);
+      };
+      setTimeout(poll, POLL_INTERVAL_MS);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not confirm import.");
       setStage("mapping");
@@ -212,7 +252,7 @@ export default function TransactionImportWizard({ businessId, onImportComplete }
                 onClick={handleConfirm}
                 disabled={!requiredFieldsMapped || stage === "confirming"}
               >
-                {stage === "confirming" ? "Importing…" : "Confirm and import"}
+                {stage === "confirming" ? "Importing… (this runs in the background, hang tight)" : "Confirm and import"}
               </button>
               <button className={styles.cancelButton} onClick={reset} disabled={stage === "confirming"}>
                 Cancel
@@ -227,13 +267,13 @@ export default function TransactionImportWizard({ businessId, onImportComplete }
           <div className={styles.resultSummary}>
             <div className={styles.resultStat}>
               <div className={`${styles.resultStatValue} ${styles.successValue}`}>
-                {result.imported_row_count}
+                {result.imported_row_count ?? 0}
               </div>
               <div className={styles.resultStatLabel}>Imported</div>
             </div>
             <div className={styles.resultStat}>
               <div className={`${styles.resultStatValue} ${styles.failValue}`}>
-                {result.failed_row_count}
+                {result.failed_row_count ?? 0}
               </div>
               <div className={styles.resultStatLabel}>Failed</div>
             </div>
