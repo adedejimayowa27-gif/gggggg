@@ -24,7 +24,8 @@ import {
 } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { Business } from "@/types";
+import { listTeamMembers } from "@/lib/team";
+import type { Business, TeamRole } from "@/types";
 
 const SELECTED_BUSINESS_STORAGE_KEY = "bizintel:selectedBusinessId";
 
@@ -34,15 +35,22 @@ interface DashboardContextValue {
   isLoadingBusinesses: boolean;
   refreshBusinesses: () => Promise<void>;
   selectBusiness: (businessId: string) => void;
+  // Batch 10.15 (frontend): the current user's role on primaryBusiness --
+  // "owner" for a business they own, one of the TeamMember roles
+  // otherwise, or null while it's still loading. Pages that gate
+  // admin-only actions (team management, billing, the audit log) read
+  // this instead of each independently re-deriving it.
+  currentUserRole: TeamRole | null;
 }
 
 const DashboardContext = createContext<DashboardContextValue | undefined>(undefined);
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState(true);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<TeamRole | null>(null);
 
   useEffect(() => {
     setSelectedBusinessId(window.localStorage.getItem(SELECTED_BUSINESS_STORAGE_KEY));
@@ -78,9 +86,38 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const primaryBusiness =
     businesses.find((b) => b.id === selectedBusinessId) ?? businesses[0] ?? null;
 
+  // The backend has no "my role on this business" endpoint -- every real
+  // business always has an explicit TeamMember row for its owner (role
+  // "owner", created alongside the business -- see
+  // app.services.team.create_owner_membership), so fetching the team
+  // list and matching on user_id is how the frontend learns its own
+  // role, the same way it would learn anyone else's.
+  useEffect(() => {
+    if (!token || !user || !primaryBusiness) {
+      setCurrentUserRole(null);
+      return;
+    }
+    let cancelled = false;
+    listTeamMembers(primaryBusiness.id, token)
+      .then((members) => {
+        if (cancelled) return;
+        const mine = members.find((m) => m.user_id === user.id);
+        setCurrentUserRole(mine?.role ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentUserRole(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, user, primaryBusiness]);
+
   return (
     <DashboardContext.Provider
-      value={{ businesses, primaryBusiness, isLoadingBusinesses, refreshBusinesses, selectBusiness }}
+      value={{
+        businesses, primaryBusiness, isLoadingBusinesses, refreshBusinesses, selectBusiness,
+        currentUserRole,
+      }}
     >
       {children}
     </DashboardContext.Provider>
