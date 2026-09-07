@@ -13,6 +13,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # --- App ---
     APP_NAME: str = "Mayorcity Bizintel"
+    # Batch 10.11: surfaced in the OpenAPI docs (/docs, /redoc) so a
+    # consumer of the API can tell which version of the schema they're
+    # looking at. Bump manually on a meaningful API-shape change --
+    # there's no automated versioning scheme here (e.g. no /v1, /v2 URL
+    # prefixes), so this is documentation, not an enforced contract.
+    APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -90,6 +96,15 @@ class Settings(BaseSettings):
     ENABLE_BACKGROUND_JOBS: bool = True
     ALERT_DETECTION_INTERVAL_HOURS: int = 24
     GOOGLE_SYNC_INTERVAL_HOURS: int = 6
+
+    # --- Data retention (Step 10, Batch 10.10, requirement #13) ---
+    # See app/services/retention.py for exactly what each of these
+    # governs, and docs/BACKUP_RECOVERY.md for the full policy this
+    # implements. AuditLog is deliberately NOT covered by a retention
+    # setting here -- it's kept indefinitely by design.
+    DATA_RETENTION_INTERVAL_HOURS: int = 24
+    IMPORT_RAW_ROWS_RETENTION_DAYS: int = 30
+    BACKGROUND_JOB_RETENTION_DAYS: int = 90
 
     # --- Logging & error monitoring (Step 10, Batch 10.8, requirement #6) ---
     # "json" for production (one parseable object per line, for whatever
