@@ -1,0 +1,122 @@
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.inviteForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.input {
+  flex: 1 1 240px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #1f2430;
+  border-radius: 6px;
+  background: #10131b;
+  color: inherit;
+}
+
+.select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #1f2430;
+  border-radius: 6px;
+  background: #10131b;
+  color: inherit;
+}
+
+.button {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent, #4c6ef5);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #e5484d;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.list {
+  border: 1px solid #1f2430;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #171b25;
+  flex-wrap: wrap;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rowLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.email {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.status {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.rowRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.roleBadge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: #1f2430;
+  text-transform: capitalize;
+}
+
+.removeButton {
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #3a1f24;
+  background: transparent;
+  color: #e5484d;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
