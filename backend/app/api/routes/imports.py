@@ -8,7 +8,7 @@ through this router.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_owned_business
@@ -16,10 +16,9 @@ from app.core.exceptions import AppError, NotFoundError
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.import_session import ImportSession
-from app.models.transaction import Transaction
 from app.models.user import User
-from app.services.audit import client_ip, log_action
 from app.services.billing import check_max_transactions_this_month
+from app.services.jobs import enqueue_job, run_job_async
 from app.schemas.import_session import (
     ImportConfirmIn,
     ImportConfirmOut,
@@ -28,10 +27,8 @@ from app.schemas.import_session import (
 )
 from app.services.import_pipeline import (
     MAX_FILE_SIZE_BYTES,
-    compute_fingerprint,
     parse_upload,
     suggest_mapping,
-    validate_and_convert_rows,
 )
 
 router = APIRouter(prefix="/businesses/{business_id}/imports", tags=["imports"])
@@ -97,15 +94,24 @@ async def upload_import_file(
     )
 
 
-@router.post("/{import_id}/confirm", response_model=ImportConfirmOut)
+@router.post("/{import_id}/confirm", response_model=ImportConfirmOut, status_code=status.HTTP_202_ACCEPTED)
 def confirm_import(
     import_id: uuid.UUID,
     payload: ImportConfirmIn,
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     business: Business = Depends(get_owned_business),
 ):
+    """
+    Batch 10.9: the actual row-by-row validation and insertion no longer
+    happens in this request -- for a large file (up to MAX_ROWS=5000),
+    doing that inline risked a slow response or an outright gateway
+    timeout on some hosts. This route now only does the fast, must-be-
+    synchronous parts (ownership/state checks, the plan's usage-limit
+    check) and hands the actual work to a background job; the response
+    comes back immediately with status="queued", and the caller polls
+    GET /imports/{import_id} until status is "completed" or "failed".
+    """
     import_session = _get_owned_import_session(import_id, business, db)
 
     if import_session.status != "pending_mapping":
@@ -114,47 +120,21 @@ def confirm_import(
             code="already_processed",
         )
 
+    # Checked here, synchronously, so a plan-limit rejection is immediate
+    # and visible to the user -- not something that only surfaces later
+    # as a failed background job they'd have to go looking for.
     check_max_transactions_this_month(db, business)
 
-    valid_rows, row_errors = validate_and_convert_rows(
-        import_session.raw_rows, payload.mapping
-    )
-
-    # valid_rows' keys are exactly Transaction's data columns (see
-    # validate_and_convert_rows' docstring) -- unpacking directly, rather
-    # than re-listing every field here, is what makes this pipeline
-    # reusable: a future Google Sheets sync or POS sync that produces the
-    # same (headers, rows) shape and calls the same validate_and_convert_rows
-    # can persist through this exact same shape with no route-level
-    # changes when new optional fields are added later.
-    for row in valid_rows:
-        db.add(
-            Transaction(
-                business_id=business.id,
-                import_session_id=import_session.id,
-                fingerprint=compute_fingerprint(str(business.id), row),
-                **row,
-            )
-        )
-
-    import_session.confirmed_mapping = payload.mapping
-    import_session.imported_row_count = len(valid_rows)
-    import_session.failed_row_count = len(row_errors)
-    import_session.row_errors = row_errors
-    import_session.status = "completed" if valid_rows else "failed"
-
+    import_session.status = "queued"
     db.commit()
     db.refresh(import_session)
 
-    log_action(
-        db, "import.completed", business_id=business.id, actor_user_id=current_user.id,
-        target_type="import_session", target_id=str(import_session.id),
-        details={
-            "imported_row_count": import_session.imported_row_count,
-            "failed_row_count": import_session.failed_row_count,
-        },
-        ip_address=client_ip(request),
+    job = enqueue_job(
+        db, business, job_type="import_confirm",
+        payload={"import_session_id": str(import_session.id), "mapping": payload.mapping},
+        actor_user_id=current_user.id,
     )
+    run_job_async(job.id)
 
     return ImportConfirmOut(
         id=import_session.id,
@@ -162,7 +142,29 @@ def confirm_import(
         total_row_count=import_session.total_row_count,
         imported_row_count=import_session.imported_row_count,
         failed_row_count=import_session.failed_row_count,
-        row_errors=row_errors,
+        row_errors=[],
+    )
+
+
+@router.get("/{import_id}", response_model=ImportConfirmOut)
+def get_import_session(
+    import_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Batch 10.9: polling endpoint for the status of a queued/processing
+    import -- the frontend calls this on an interval after `confirm`
+    returns 202, until status is "completed" or "failed"."""
+    import_session = _get_owned_import_session(import_id, business, db)
+    return ImportConfirmOut(
+        id=import_session.id,
+        status=import_session.status,
+        total_row_count=import_session.total_row_count,
+        imported_row_count=import_session.imported_row_count,
+        failed_row_count=import_session.failed_row_count,
+        row_errors=[
+            {"row_number": e["row_number"], "errors": e["errors"]} for e in (import_session.row_errors or [])
+        ],
     )
 
 
