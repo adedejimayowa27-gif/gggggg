@@ -43,7 +43,10 @@ class ImportSession(Base):
 
     # "pending_mapping" -> uploaded and parsed, waiting for user to confirm
     #   column mapping.
-    # "completed" -> user confirmed, valid rows stored as Transactions.
+    # "queued" -> user confirmed; a background job (Batch 10.9) has been
+    #   enqueued but the row-by-row processing hasn't run yet.
+    # "completed" -> the background job finished; valid rows stored as
+    #   Transactions (imported_row_count/failed_row_count now populated).
     # "failed" -> every row was invalid, or the file itself couldn't be
     #   processed at all.
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending_mapping")
