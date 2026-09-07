@@ -55,8 +55,8 @@ export interface ImportConfirmResult {
   id: string;
   status: string;
   total_row_count: number;
-  imported_row_count: number;
-  failed_row_count: number;
+  imported_row_count: number | null;
+  failed_row_count: number | null;
   row_errors: RowError[];
 }
 
@@ -342,4 +342,59 @@ export interface Branch {
   is_default: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// --- Team members -----------------------------------------------------
+//
+// Mirrors backend/app/schemas/team.py.
+
+export type TeamRole = "owner" | "admin" | "member" | "viewer";
+
+export interface TeamMember {
+  id: string;
+  business_id: string;
+  user_id: string | null;
+  invited_email: string;
+  role: TeamRole;
+  status: string;
+  created_at: string;
+}
+
+// --- Billing -------------------------------------------------------------
+//
+// Mirrors backend/app/schemas/billing.py.
+
+export interface Plan {
+  id: string;
+  key: string;
+  name: string;
+  price_ngn: string;
+  max_businesses_per_user: number | null;
+  max_branches_per_business: number | null;
+  max_team_members_per_business: number | null;
+  max_transactions_per_month: number | null;
+}
+
+export interface Subscription {
+  id: string;
+  business_id: string;
+  status: string;
+  current_period_end: string | null;
+  plan: Plan;
+}
+
+// --- Audit log -------------------------------------------------------------
+//
+// Mirrors backend/app/schemas/audit_log.py.
+
+export interface AuditLogEntry {
+  id: string;
+  business_id: string | null;
+  actor_user_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  details: Record<string, unknown>;
+  ip_address: string | null;
+  created_at: string;
 }
