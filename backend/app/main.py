@@ -21,6 +21,8 @@ from app.core.middleware import RequestIDMiddleware
 from app.core.monitoring import init_monitoring
 from app.core.rate_limit import limiter
 from app.core.security_headers import MaxBodySizeMiddleware, SecurityHeadersMiddleware
+from app.core.tags_metadata import TAGS_METADATA
+from app.services.jobs import shutdown_executor
 from app.services.scheduler import shutdown_scheduler, start_scheduler
 
 # Batch 10.8: configured before anything else (including init_monitoring
@@ -39,11 +41,26 @@ async def lifespan(app: FastAPI):
     start_scheduler()
     yield
     shutdown_scheduler()
+    # Batch 10.9: waits for any in-flight background job (e.g. a large
+    # import mid-processing) to finish before the process actually exits,
+    # so a deploy/restart can't abandon it partway through a DB write.
+    shutdown_executor(wait=True)
     logger.info("Application shutdown.")
 
 
 app = FastAPI(
     title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    # Batch 10.11: shown at the top of /docs and /redoc. Kept short --
+    # the full reference (auth flow, error shape, rate limits, tenant
+    # model, pagination conventions) lives in docs/API.md so it doesn't
+    # need to be duplicated/kept in sync in two places.
+    description=(
+        "See `docs/API.md` in the repository for the full developer guide "
+        "(authentication flow, error response shape, rate limits, and the "
+        "multi-tenant business/branch model every endpoint below is scoped to)."
+    ),
+    openapi_tags=TAGS_METADATA,
     debug=settings.DEBUG,
     lifespan=lifespan,
 )
