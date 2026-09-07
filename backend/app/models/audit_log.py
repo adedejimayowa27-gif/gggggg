@@ -29,8 +29,16 @@ class AuditLog(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
+    # Batch 10.10: ondelete="SET NULL", not CASCADE -- an audit trail
+    # that gets destroyed the moment the business it's about is deleted
+    # defeats the point of having one (the whole value of an audit log is
+    # answering "what happened" *after the fact*, including after the
+    # thing itself is gone). Same reasoning already applied to
+    # actor_user_id below. There's no business-deletion endpoint in this
+    # app yet, but this is the correct invariant regardless of when one
+    # is added.
     business_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=True, index=True
+        UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="SET NULL"), nullable=True, index=True
     )
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
