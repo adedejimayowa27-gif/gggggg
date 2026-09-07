@@ -27,6 +27,7 @@ from app.db.session import SessionLocal
 from app.models.business import Business
 from app.models.google_integration import GoogleIntegration
 from app.services.alert_engine import run_all_detectors
+from app.services.retention import run_scheduled_data_retention
 from app.services.sheets_sync import sync_now
 
 logger = logging.getLogger(__name__)
@@ -113,11 +114,23 @@ def start_scheduler() -> BackgroundScheduler | None:
         hours=settings.GOOGLE_SYNC_INTERVAL_HOURS,
         id="google_sync",
     )
+    # Batch 10.10: data retention (clearing stale import raw_rows,
+    # pruning old completed background_jobs) -- see app.services.retention
+    # for what's pruned and, just as importantly, what's deliberately not
+    # (AuditLog is kept indefinitely).
+    scheduler.add_job(
+        run_scheduled_data_retention,
+        "interval",
+        hours=settings.DATA_RETENTION_INTERVAL_HOURS,
+        id="data_retention",
+    )
     scheduler.start()
     _scheduler = scheduler
     logger.info(
-        "Background job scheduler started (alerts every %dh, Sheets sync every %dh).",
+        "Background job scheduler started (alerts every %dh, Sheets sync every %dh, "
+        "data retention every %dh).",
         settings.ALERT_DETECTION_INTERVAL_HOURS, settings.GOOGLE_SYNC_INTERVAL_HOURS,
+        settings.DATA_RETENTION_INTERVAL_HOURS,
     )
     return scheduler
 
