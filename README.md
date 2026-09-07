@@ -85,7 +85,8 @@ uvicorn app.main:app --reload
 ```
 
 Backend runs at **http://localhost:8000**
-Interactive API docs: **http://localhost:8000/docs**
+Interactive API docs: **http://localhost:8000/docs** (Swagger UI) or **http://localhost:8000/redoc** (ReDoc)
+Developer guide (auth flow, error shape, rate limits, multi-tenant model): **[docs/API.md](docs/API.md)**
 Health check: **http://localhost:8000/health**
 
 ## 3. Frontend setup
@@ -99,11 +100,31 @@ npm run dev
 
 Frontend runs at **http://localhost:3000**
 
+## Running the backend test suite
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
+
+Tests run against a real Postgres database (not SQLite -- the models
+use Postgres-specific JSONB/UUID types), on a separate `_test`-suffixed
+database that's created automatically on first run if it doesn't exist
+yet, so this never touches your real dev data. Point `TEST_DATABASE_URL`
+at a different instance if you'd rather not use the same Postgres
+container. See `backend/tests/conftest.py` for details.
+
 ## Verifying everything works
 
 1. `curl http://localhost:8000/health` → should return `{"status": "ok", "database": "ok"}`
 2. Visit `http://localhost:3000` → should show the placeholder homepage
 3. (Once auth + business models land in the next steps) register a user, log in, and create a business
+
+## Operations
+
+- **API reference & conventions:** [docs/API.md](docs/API.md)
+- **Backup, recovery & data retention:** [docs/BACKUP_RECOVERY.md](docs/BACKUP_RECOVERY.md)
 
 ## What's in this step vs. later steps
 
