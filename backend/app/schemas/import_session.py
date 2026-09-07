@@ -32,13 +32,22 @@ class ImportConfirmIn(BaseModel):
 
 
 class ImportConfirmOut(BaseModel):
+    """
+    Batch 10.9: imported_row_count/failed_row_count are now nullable --
+    both stay null while status is "queued" (the background job hasn't
+    run yet), get populated once status becomes "completed" or "failed".
+    Same shape used for both the immediate 202 response from POST
+    .../confirm and the polling GET .../{import_id} response, so the
+    frontend can treat them identically.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     status: str
     total_row_count: int
-    imported_row_count: int
-    failed_row_count: int
+    imported_row_count: int | None
+    failed_row_count: int | None
     row_errors: list[RowError]
 
 
