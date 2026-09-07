@@ -18,6 +18,9 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Analytics", href: "/dashboard/analytics", enabled: true },
   { label: "Simulator", href: "/dashboard/simulator", enabled: true },
   { label: "AI Assistant", href: "/dashboard/ai-assistant", enabled: true },
+  { label: "Team", href: "/dashboard/team", enabled: true },
+  { label: "Billing", href: "/dashboard/billing", enabled: true },
+  { label: "Audit Log", href: "/dashboard/audit-log", enabled: true },
   { label: "Settings", href: "/dashboard/settings", enabled: true },
 ];
 
