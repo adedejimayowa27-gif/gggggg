@@ -1,0 +1,6 @@
+# Test-only dependencies (Step 10, Batch 10.12, requirement #15). Kept
+# separate from requirements.txt so production installs never pull in
+# test tooling.
+-r requirements.txt
+
+pytest==8.3.4
