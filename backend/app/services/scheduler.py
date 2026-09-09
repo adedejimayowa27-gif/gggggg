@@ -26,6 +26,8 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.business import Business
 from app.models.google_integration import GoogleIntegration
+from app.models.microsoft_integration import MicrosoftIntegration
+from app.services.excel_sync import sync_now as sync_excel_now
 from app.services.alert_engine import run_all_detectors
 from app.services.retention import run_scheduled_data_retention
 from app.services.sheets_sync import sync_now
@@ -36,7 +38,16 @@ logger = logging.getLogger(__name__)
 def run_scheduled_alert_detection() -> None:
     """Runs every registered alert detector for every business. Called on a schedule
     (settings.ALERT_DETECTION_INTERVAL_HOURS) -- same underlying function
-    POST /alerts/run calls, just with no HTTP request behind it."""
+    POST /alerts/run calls, just with no HTTP request behind it.
+
+    Step 11, Batch 11.7 (performance-at-scale audit note, not a fix): this
+    iterates every business sequentially in one long-lived session, which
+    is fine at this app's current scale but would eventually need
+    batching/parallelization (or moving each business's detection into
+    its own app.services.jobs background job) once the number of
+    businesses grows large enough that one full pass no longer
+    comfortably fits inside ALERT_DETECTION_INTERVAL_HOURS.
+    """
     db: Session = SessionLocal()
     try:
         businesses = db.query(Business).all()
@@ -90,6 +101,42 @@ def run_scheduled_google_sync() -> None:
         db.close()
 
 
+def run_scheduled_microsoft_sync() -> None:
+    """Syncs every business with a connected, fully-configured Microsoft
+    Excel integration (a workbook/worksheet selected AND a mapping saved
+    -- anything less isn't ready to sync unattended). Same underlying
+    sync_now() function POST /microsoft/sync calls. Mirrors
+    run_scheduled_google_sync exactly."""
+    db: Session = SessionLocal()
+    try:
+        integrations = (
+            db.query(MicrosoftIntegration)
+            .filter(
+                MicrosoftIntegration.status == "connected",
+                MicrosoftIntegration.confirmed_mapping.isnot(None),
+            )
+            .all()
+        )
+        synced_count = 0
+        for integration in integrations:
+            business = db.query(Business).filter(Business.id == integration.business_id).first()
+            if not business:
+                continue
+            try:
+                sync_excel_now(db, business, integration)
+                synced_count += 1
+            except Exception:  # noqa: BLE001 -- one integration's failure must not stop the rest
+                logger.exception(
+                    "Scheduled Microsoft Excel sync failed for business %s", business.id
+                )
+        logger.info(
+            "Scheduled Microsoft Excel sync complete: %d/%d integrations synced",
+            synced_count, len(integrations),
+        )
+    finally:
+        db.close()
+
+
 _scheduler: BackgroundScheduler | None = None
 
 
@@ -114,6 +161,12 @@ def start_scheduler() -> BackgroundScheduler | None:
         hours=settings.GOOGLE_SYNC_INTERVAL_HOURS,
         id="google_sync",
     )
+    scheduler.add_job(
+        run_scheduled_microsoft_sync,
+        "interval",
+        hours=settings.MICROSOFT_SYNC_INTERVAL_HOURS,
+        id="microsoft_sync",
+    )
     # Batch 10.10: data retention (clearing stale import raw_rows,
     # pruning old completed background_jobs) -- see app.services.retention
     # for what's pruned and, just as importantly, what's deliberately not
@@ -128,9 +181,9 @@ def start_scheduler() -> BackgroundScheduler | None:
     _scheduler = scheduler
     logger.info(
         "Background job scheduler started (alerts every %dh, Sheets sync every %dh, "
-        "data retention every %dh).",
+        "Excel sync every %dh, data retention every %dh).",
         settings.ALERT_DETECTION_INTERVAL_HOURS, settings.GOOGLE_SYNC_INTERVAL_HOURS,
-        settings.DATA_RETENTION_INTERVAL_HOURS,
+        settings.MICROSOFT_SYNC_INTERVAL_HOURS, settings.DATA_RETENTION_INTERVAL_HOURS,
     )
     return scheduler
 
