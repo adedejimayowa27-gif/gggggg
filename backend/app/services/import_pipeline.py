@@ -511,3 +511,137 @@ def compute_fingerprint(business_id: str, row: dict) -> str:
     ]
     canonical = "|".join(parts)
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+# --- Background job handler (Step 10, Batch 10.9, requirement #9) -------
+# Moved here (rather than staying inline in app.api.routes.imports) so it
+# can run from a worker thread with its own DB session -- see
+# app.services.jobs for why a route-scoped session can't be reused for
+# this. Registered with app.services.jobs at import time so the job
+# executor can dispatch "import_confirm" jobs to it without jobs.py
+# needing to import this module directly (see that module's docstring
+# for why that avoidance matters).
+def execute_confirmed_import(db, import_session_id: str, mapping: dict) -> dict:
+    """
+    Does the actual work of a confirmed import: validates+converts every
+    raw row, skips any row that's a duplicate of an already-imported
+    transaction (by fingerprint -- Step 11, Batch 11.3: this dedup check
+    was missing from this path entirely; app.services.sheets_sync's
+    Google Sheets sync already did this correctly, so the two import
+    paths had inconsistent -- and, for file uploads, absent -- duplicate
+    protection. Re-uploading the same file, or a file overlapping an
+    earlier one, would silently create real duplicate Transaction rows.
+    This mirrors sheets_sync.sync_now's exact approach: precompute every
+    valid row's fingerprint, look up which already exist for this
+    business in one query, skip those, and guard against a duplicate
+    appearing twice within the same file), inserts the rest as
+    Transactions, and updates the ImportSession's status/counts. Returns
+    a small JSON-safe summary (stored as the job's `result`).
+
+    Deliberately takes plain values (a session, a stringified UUID, a
+    mapping dict) rather than ORM objects loaded by a *different* session
+    -- an object loaded under one Session must never be touched from
+    another, so the caller passes identifiers/data instead of objects.
+    """
+    # Local imports (not at module top) to avoid a model-layer import
+    # cycle: app.models.business imports app.models.import_session (via
+    # its `import_sessions` relationship), and keeping this module's
+    # top-level imports free of model classes keeps it usable from
+    # anywhere (route, job handler, a future CLI script) without ever
+    # needing to worry about import order.
+    import uuid as uuid_module
+
+    from app.models.import_session import ImportSession
+    from app.models.transaction import Transaction
+
+    import_session = db.get(ImportSession, uuid_module.UUID(import_session_id))
+    if import_session is None:
+        raise ValueError(f"Import session {import_session_id} not found.")
+
+    valid_rows, row_errors = validate_and_convert_rows(import_session.raw_rows, mapping)
+
+    business_id_str = str(import_session.business_id)
+
+    # Batch 11.3: same duplicate check as sheets_sync.sync_now -- computed
+    # for every valid row up front so the "already exists" lookup is a
+    # single query, not one query per row.
+    fingerprints = [compute_fingerprint(business_id_str, row) for row in valid_rows]
+    existing_fingerprints = {
+        row[0]
+        for row in db.query(Transaction.fingerprint)
+        .filter(
+            Transaction.business_id == import_session.business_id,
+            Transaction.fingerprint.in_(fingerprints),
+        )
+        .all()
+    }
+
+    imported_count = 0
+    skipped_count = 0
+    for row, fingerprint in zip(valid_rows, fingerprints):
+        if fingerprint in existing_fingerprints:
+            skipped_count += 1
+            continue
+        db.add(
+            Transaction(
+                business_id=import_session.business_id,
+                import_session_id=import_session.id,
+                fingerprint=fingerprint,
+                **row,
+            )
+        )
+        imported_count += 1
+        existing_fingerprints.add(fingerprint)  # guards against a duplicate row within this same file
+
+    import_session.confirmed_mapping = mapping
+    import_session.imported_row_count = imported_count
+    import_session.skipped_duplicate_count = skipped_count
+    import_session.failed_row_count = len(row_errors)
+    import_session.row_errors = row_errors
+    import_session.status = "completed" if (imported_count or skipped_count) else "failed"
+    db.commit()
+
+    return {
+        "imported_row_count": import_session.imported_row_count,
+        "skipped_duplicate_count": import_session.skipped_duplicate_count,
+        "failed_row_count": import_session.failed_row_count,
+        "row_errors": row_errors,
+    }
+
+
+def _handle_import_confirm_job(db, job) -> dict:
+    """app.services.jobs handler wrapper for job_type="import_confirm".
+    Unpacks the job's payload and delegates to execute_confirmed_import,
+    then writes the same audit-log entry the old inline route code used
+    to write immediately after committing -- ip_address is always None
+    here since there's no HTTP request on this thread to read it from."""
+    from app.services.audit import log_action
+
+    payload = job.payload
+    result = execute_confirmed_import(db, payload["import_session_id"], payload["mapping"])
+
+    log_action(
+        db, "import.completed", business_id=job.business_id, actor_user_id=job.actor_user_id,
+        target_type="import_session", target_id=payload["import_session_id"],
+        details={
+            "imported_row_count": result["imported_row_count"],
+            "skipped_duplicate_count": result["skipped_duplicate_count"],
+            "failed_row_count": result["failed_row_count"],
+        },
+        ip_address=None,
+    )
+    return result
+
+
+def _register_job_handler() -> None:
+    # Deferred import (see this module's other local-import comments
+    # above) -- avoids import_pipeline.py depending on app.services.jobs
+    # at module-load time in the one direction that would actually cycle
+    # (jobs.py is imported very early, by app.main, before some of
+    # import_pipeline's own dependents are set up).
+    from app.services.jobs import register_handler
+
+    register_handler("import_confirm", _handle_import_confirm_job)
+
+
+_register_job_handler()
