@@ -56,6 +56,7 @@ export interface ImportConfirmResult {
   status: string;
   total_row_count: number;
   imported_row_count: number | null;
+  skipped_duplicate_count: number | null;
   failed_row_count: number | null;
   row_errors: RowError[];
 }
@@ -327,6 +328,61 @@ export interface SyncResult {
   skipped_duplicate_count: number;
   failed_row_count: number;
   row_errors: SyncRowError[];
+  synced_at: string;
+}
+
+// --- Microsoft Excel/OneDrive integration ---------------------------------
+//
+// Mirrors backend/app/schemas/microsoft_integration.py.
+
+export interface MicrosoftIntegrationStatus {
+  id: string;
+  business_id: string;
+  microsoft_email: string;
+  status: string;
+  scopes: string;
+  workbook_item_id: string | null;
+  workbook_name: string | null;
+  worksheet_id: string | null;
+  worksheet_name: string | null;
+  has_confirmed_mapping: boolean;
+  last_synced_at: string | null;
+  last_sync_error: string | null;
+  created_at: string;
+}
+
+export interface WorkbookItem {
+  id: string;
+  name: string;
+  modified_time: string | null;
+}
+
+export interface ExcelWorksheetItem {
+  id: string;
+  name: string;
+  position: number | null;
+}
+
+export interface ExcelPreview {
+  detected_columns: string[];
+  suggested_mapping: Record<string, string | null>;
+  preview_rows: Record<string, unknown>[];
+  total_row_count: number;
+}
+
+export interface ExcelSyncRowError {
+  row_number: number;
+  errors: string[];
+}
+
+export interface ExcelSyncResult {
+  id: string;
+  status: string;
+  total_row_count: number;
+  imported_row_count: number;
+  skipped_duplicate_count: number;
+  failed_row_count: number;
+  row_errors: ExcelSyncRowError[];
   synced_at: string;
 }
 
