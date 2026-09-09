@@ -743,11 +743,25 @@ def run_all_detectors(db: Session, business: Business, today: date | None = None
     wrapped individually so a bug or edge case in, say, the outlier
     detector can't silently prevent the margin detector from ever
     running for this business.
+
+    Batch 11.2: the in-Python dedupe check above is also backed by a DB
+    unique constraint on (business_id, dedupe_key) (migration
+    0017_alert_dedupe_unique) -- belt-and-suspenders against two
+    detection runs for the same business overlapping (the scheduled job
+    and a manual "Run now" firing close together, for example), which
+    could otherwise both pass the in-Python check before either commits.
+    If that constraint is ever hit, this retries once: re-check which of
+    this run's candidates are still actually new against the database's
+    current state, and commit only those. This can only ever discard a
+    candidate that a concurrent run *also* just detected and already
+    saved -- never lose a real alert.
     """
     # Local import avoids a hard import-time dependency from this pure
     # calculation module on the ORM model -- consistent with
     # scenario_engine.py not importing Simulation either.
     import logging
+
+    from sqlalchemy.exc import IntegrityError
 
     from app.models.alert import Alert
 
@@ -794,7 +808,36 @@ def run_all_detectors(db: Session, business: Business, today: date | None = None
             created.append(alert)
             existing_keys.add(candidate.dedupe_key)  # guards against two detectors emitting the same key in one run
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent run for this same business won the race on at
+        # least one dedupe_key -- roll back this whole batch, then
+        # re-add only the alerts that are still actually new against
+        # the database's current (post-conflict) state. dedupe_key is
+        # captured into a plain tuple *before* touching the session
+        # again: after rollback, SQLAlchemy expires every object that
+        # was part of the failed transaction, and since these rows were
+        # never actually persisted, reading an attribute off one would
+        # try to re-fetch it from the database and raise -- capturing
+        # the plain string here avoids ever touching the ORM object
+        # again before it's re-added.
+        created_with_keys = [(alert, alert.dedupe_key) for alert in created]
+        db.rollback()
+        logger.info(
+            "Alert dedupe race detected for business %s -- retrying with only still-new candidates.",
+            business.id,
+        )
+        current_keys = {
+            row[0]
+            for row in db.query(Alert.dedupe_key).filter(Alert.business_id == business.id).all()
+        }
+        still_new = [alert for alert, key in created_with_keys if key not in current_keys]
+        for alert in still_new:
+            db.add(alert)
+        db.commit()
+        created = still_new
+
     for alert in created:
         db.refresh(alert)
     return created
