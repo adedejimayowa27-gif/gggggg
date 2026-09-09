@@ -70,6 +70,27 @@ class Settings(BaseSettings):
     # back it up.
     GOOGLE_TOKEN_ENCRYPTION_KEY: str = ""
 
+    # --- Microsoft Excel/OneDrive integration (Step 11, Batch 11.9) ---
+    # Same empty-by-default pattern as Google above -- this app runs
+    # fully without a Microsoft app registration; the /microsoft/connect
+    # route raises a clear 503 if these are unset. Get these from an app
+    # registration in Azure Portal > App registrations, with the
+    # Microsoft Graph "Files.Read" and "User.Read" delegated permissions
+    # granted.
+    MICROSOFT_CLIENT_ID: str = ""
+    MICROSOFT_CLIENT_SECRET: str = ""
+    # Must exactly match a redirect URI registered on the app
+    # registration, and must point at this backend's own
+    # /microsoft/callback route (not the frontend) -- Microsoft redirects
+    # the user's browser here directly with the auth code, same as
+    # Google's flow above.
+    MICROSOFT_REDIRECT_URI: str = ""
+    # Fernet key encrypting Microsoft access/refresh tokens at rest --
+    # can reuse the same key as GOOGLE_TOKEN_ENCRYPTION_KEY or generate a
+    # separate one with the same command shown above; either is fine
+    # since Fernet keys aren't tied to a specific provider.
+    MICROSOFT_TOKEN_ENCRYPTION_KEY: str = ""
+
     # Where to send the user's browser back to after the OAuth callback
     # finishes (success or failure) -- the frontend's settings/integration
     # page, not this backend.
@@ -96,6 +117,7 @@ class Settings(BaseSettings):
     ENABLE_BACKGROUND_JOBS: bool = True
     ALERT_DETECTION_INTERVAL_HOURS: int = 24
     GOOGLE_SYNC_INTERVAL_HOURS: int = 6
+    MICROSOFT_SYNC_INTERVAL_HOURS: int = 6
 
     # --- Data retention (Step 10, Batch 10.10, requirement #13) ---
     # See app/services/retention.py for exactly what each of these
