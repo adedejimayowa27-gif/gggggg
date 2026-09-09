@@ -271,6 +271,16 @@ export default function TransactionImportWizard({ businessId, onImportComplete }
               </div>
               <div className={styles.resultStatLabel}>Imported</div>
             </div>
+            {/* Batch 11.3: file uploads now run the same duplicate check
+                Google Sheets sync always has -- shown only when relevant
+                so a normal first-time import doesn't grow a fourth stat
+                showing "0" every time. */}
+            {!!result.skipped_duplicate_count && (
+              <div className={styles.resultStat}>
+                <div className={styles.resultStatValue}>{result.skipped_duplicate_count}</div>
+                <div className={styles.resultStatLabel}>Already imported (skipped)</div>
+              </div>
+            )}
             <div className={styles.resultStat}>
               <div className={`${styles.resultStatValue} ${styles.failValue}`}>
                 {result.failed_row_count ?? 0}
