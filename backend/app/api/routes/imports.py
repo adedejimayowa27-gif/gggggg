@@ -141,6 +141,7 @@ def confirm_import(
         status=import_session.status,
         total_row_count=import_session.total_row_count,
         imported_row_count=import_session.imported_row_count,
+        skipped_duplicate_count=import_session.skipped_duplicate_count,
         failed_row_count=import_session.failed_row_count,
         row_errors=[],
     )
@@ -161,6 +162,7 @@ def get_import_session(
         status=import_session.status,
         total_row_count=import_session.total_row_count,
         imported_row_count=import_session.imported_row_count,
+        skipped_duplicate_count=import_session.skipped_duplicate_count,
         failed_row_count=import_session.failed_row_count,
         row_errors=[
             {"row_number": e["row_number"], "errors": e["errors"]} for e in (import_session.row_errors or [])
