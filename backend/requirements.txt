@@ -7,7 +7,17 @@ pydantic==2.9.2
 pydantic-settings==2.5.2
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
+# Batch 11.1 -- pinned below 4.0: passlib 1.7.4 (last released 2020)
+# reads bcrypt's `__about__.__version__` attribute to detect the backend
+# version, which bcrypt>=4.0 removed. Depending on the exact bcrypt/
+# passlib patch combination this either logs a "(trapped) error reading
+# bcrypt version" warning on every hash/verify call, or can fail
+# password hashing outright -- a well-documented ecosystem
+# incompatibility (see pyca/bcrypt#684 and related passlib issues), not
+# something specific to this app. 3.2.2 is the last stable 3.x release
+# and is fully compatible with passlib 1.7.4 with no code changes needed
+# on our side.
+bcrypt==3.2.2
 python-multipart==0.0.9
 email-validator==2.2.0
 pandas==2.2.3
