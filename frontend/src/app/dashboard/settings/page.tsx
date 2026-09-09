@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Settings page (Step 9) -- currently just the Google Sheets integration
- * setup/sync flow, since that's the only setting the backend supports so
- * far. Receives the OAuth callback's ?google=connected/error redirect.
+ * Settings page -- the Google Sheets and Microsoft Excel/OneDrive
+ * integration setup/sync flows, plus branch management. Receives the
+ * OAuth callbacks' ?google=connected/error and ?microsoft=connected/error
+ * redirects.
  */
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -21,6 +22,17 @@ import {
   saveMapping,
   saveSelection,
 } from "@/lib/google";
+import {
+  connectMicrosoft,
+  disconnectMicrosoft,
+  getMicrosoftStatus,
+  listExcelWorksheets,
+  listWorkbooks,
+  previewExcelWorksheet,
+  runExcelSync,
+  saveExcelMapping,
+  saveExcelSelection,
+} from "@/lib/microsoft";
 import { createBranch, deleteBranch, listBranches } from "@/lib/branches";
 import {
   STANDARD_FIELDS,
@@ -31,6 +43,11 @@ import {
   type SyncResult,
   type WorksheetItem,
   type Branch,
+  type MicrosoftIntegrationStatus,
+  type ExcelPreview,
+  type ExcelSyncResult,
+  type ExcelWorksheetItem,
+  type WorkbookItem,
 } from "@/types";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./settings.module.css";
@@ -66,6 +83,24 @@ export default function SettingsPage() {
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // --- Microsoft Excel/OneDrive (mirrors the Google state block above
+  // exactly, kept in separate state since a business can have both
+  // integrations connected at once, independently) ---
+  const [excelStatus, setExcelStatus] = useState<MicrosoftIntegrationStatus | null | undefined>(undefined);
+  const [excelCallbackNotice, setExcelCallbackNotice] = useState<string | null>(null);
+
+  const [workbooks, setWorkbooks] = useState<WorkbookItem[]>([]);
+  const [excelWorksheets, setExcelWorksheets] = useState<ExcelWorksheetItem[]>([]);
+  const [selectedWorkbook, setSelectedWorkbook] = useState("");
+  const [selectedExcelWorksheet, setSelectedExcelWorksheet] = useState("");
+
+  const [excelPreview, setExcelPreview] = useState<ExcelPreview | null>(null);
+  const [excelMapping, setExcelMapping] = useState<Record<string, string | null>>({});
+
+  const [excelSyncResult, setExcelSyncResult] = useState<ExcelSyncResult | null>(null);
+  const [isExcelBusy, setIsExcelBusy] = useState(false);
+  const [excelError, setExcelError] = useState<string | null>(null);
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [newBranchName, setNewBranchName] = useState("");
@@ -196,7 +231,109 @@ export default function SettingsPage() {
       .finally(() => setIsBusy(false));
   };
 
-  if (isLoadingBusinesses || status === undefined) {
+  // --- Microsoft Excel/OneDrive handlers (mirror the Google handlers
+  // above exactly) ---
+  const loadExcelStatus = () => {
+    if (!token || !primaryBusiness) return;
+    getMicrosoftStatus(primaryBusiness.id, token).then(setExcelStatus);
+  };
+
+  useEffect(loadExcelStatus, [token, primaryBusiness]);
+
+  useEffect(() => {
+    const flag = searchParams.get("microsoft");
+    if (flag === "connected") setExcelCallbackNotice("Microsoft account connected successfully.");
+    if (flag === "error") setExcelCallbackNotice("Could not connect your Microsoft account. Please try again.");
+  }, [searchParams]);
+
+  const handleConnectExcel = () => {
+    if (!token || !primaryBusiness) return;
+    setExcelError(null);
+    setIsExcelBusy(true);
+    connectMicrosoft(primaryBusiness.id, token)
+      .then((res) => {
+        window.location.href = res.authorization_url;
+      })
+      .catch((err) => {
+        setExcelError(
+          err instanceof ApiError
+            ? err.message
+            : "Could not start Microsoft connection. Please try again."
+        );
+        setIsExcelBusy(false);
+      });
+  };
+
+  const handleDisconnectExcel = () => {
+    if (!token || !primaryBusiness) return;
+    disconnectMicrosoft(primaryBusiness.id, token).then(() => {
+      setExcelStatus(null);
+      setWorkbooks([]);
+      setExcelWorksheets([]);
+      setExcelPreview(null);
+      setExcelSyncResult(null);
+    });
+  };
+
+  const loadWorkbooks = () => {
+    if (!token || !primaryBusiness) return;
+    setIsExcelBusy(true);
+    setExcelError(null);
+    listWorkbooks(primaryBusiness.id, token)
+      .then(setWorkbooks)
+      .catch((err) => setExcelError(err instanceof ApiError ? err.message : "Could not load workbooks."))
+      .finally(() => setIsExcelBusy(false));
+  };
+
+  const handlePickWorkbook = (id: string) => {
+    setSelectedWorkbook(id);
+    setSelectedExcelWorksheet("");
+    if (!token || !primaryBusiness || !id) return;
+    listExcelWorksheets(primaryBusiness.id, id, token).then(setExcelWorksheets);
+  };
+
+  const handleSaveExcelSelection = () => {
+    if (!token || !primaryBusiness || !selectedWorkbook || !selectedExcelWorksheet) return;
+    setIsExcelBusy(true);
+    setExcelError(null);
+    saveExcelSelection(primaryBusiness.id, selectedWorkbook, selectedExcelWorksheet, token)
+      .then((updated) => {
+        setExcelStatus(updated);
+        return previewExcelWorksheet(primaryBusiness.id, token);
+      })
+      .then((p) => {
+        setExcelPreview(p);
+        setExcelMapping(p.suggested_mapping);
+      })
+      .catch((err) => setExcelError(err instanceof ApiError ? err.message : "Could not save selection."))
+      .finally(() => setIsExcelBusy(false));
+  };
+
+  const handleSaveExcelMapping = () => {
+    if (!token || !primaryBusiness) return;
+    setIsExcelBusy(true);
+    setExcelError(null);
+    saveExcelMapping(primaryBusiness.id, excelMapping, token)
+      .then(setExcelStatus)
+      .catch((err) => setExcelError(err instanceof ApiError ? err.message : "Could not save mapping."))
+      .finally(() => setIsExcelBusy(false));
+  };
+
+  const handleExcelSync = () => {
+    if (!token || !primaryBusiness) return;
+    setIsExcelBusy(true);
+    setExcelError(null);
+    setExcelSyncResult(null);
+    runExcelSync(primaryBusiness.id, token)
+      .then((result) => {
+        setExcelSyncResult(result);
+        loadExcelStatus();
+      })
+      .catch((err) => setExcelError(err instanceof ApiError ? err.message : "Sync failed."))
+      .finally(() => setIsExcelBusy(false));
+  };
+
+  if (isLoadingBusinesses || status === undefined || excelStatus === undefined) {
     return <p style={{ color: "var(--muted)" }}>Loading…</p>;
   }
 
@@ -206,6 +343,9 @@ export default function SettingsPage() {
 
   const requiredFieldsMapped = STANDARD_FIELDS.filter((f) => !OPTIONAL_FIELDS.includes(f)).every(
     (f) => mapping[f]
+  );
+  const excelRequiredFieldsMapped = STANDARD_FIELDS.filter((f) => !OPTIONAL_FIELDS.includes(f)).every(
+    (f) => excelMapping[f]
   );
 
   return (
@@ -363,6 +503,170 @@ export default function SettingsPage() {
         )}
 
         {error && <p className={styles.error}>{error}</p>}
+      </div>
+
+      <div className={styles.card}>
+        <h2>Microsoft Excel Integration</h2>
+
+        {excelCallbackNotice && <p className={styles.notice}>{excelCallbackNotice}</p>}
+
+        {!excelStatus && (
+          <>
+            <p className={styles.muted}>
+              Connect a Microsoft account to import transactions directly from an Excel workbook
+              stored in OneDrive.
+            </p>
+            <button className={styles.primaryButton} onClick={handleConnectExcel} disabled={isExcelBusy}>
+              {isExcelBusy ? "Connecting…" : "Connect Microsoft Account"}
+            </button>
+          </>
+        )}
+
+        {excelStatus && (
+          <>
+            <p className={styles.connectedRow}>
+              Connected as <strong>{excelStatus.microsoft_email}</strong>
+              {excelStatus.status === "error" && (
+                <span className={styles.errorBadge}>Reconnect needed</span>
+              )}
+              <button className={styles.linkButton} onClick={handleDisconnectExcel}>
+                Disconnect
+              </button>
+            </p>
+
+            {!workbooks.length && (
+              <button className={styles.primaryButton} onClick={loadWorkbooks} disabled={isExcelBusy}>
+                {isExcelBusy ? "Loading…" : "Choose a workbook"}
+              </button>
+            )}
+
+            {workbooks.length > 0 && (
+              <div className={styles.formRow}>
+                <label>
+                  Workbook
+                  <select value={selectedWorkbook} onChange={(e) => handlePickWorkbook(e.target.value)}>
+                    <option value="">-- Select --</option>
+                    {workbooks.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {excelWorksheets.length > 0 && (
+                  <label>
+                    Worksheet
+                    <select
+                      value={selectedExcelWorksheet}
+                      onChange={(e) => setSelectedExcelWorksheet(e.target.value)}
+                    >
+                      <option value="">-- Select --</option>
+                      {excelWorksheets.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {selectedWorkbook && selectedExcelWorksheet && (
+                  <button
+                    className={styles.primaryButton}
+                    onClick={handleSaveExcelSelection}
+                    disabled={isExcelBusy}
+                  >
+                    Use this worksheet
+                  </button>
+                )}
+              </div>
+            )}
+
+            {excelStatus.workbook_name && !excelPreview && (
+              <p className={styles.muted}>
+                Currently using <strong>{excelStatus.workbook_name}</strong> / {excelStatus.worksheet_name}
+                {excelStatus.has_confirmed_mapping ? " -- mapping already saved." : ""}
+              </p>
+            )}
+
+            {excelPreview && (
+              <div className={styles.mappingBlock}>
+                <h3>Map columns</h3>
+                <p className={styles.muted}>{excelPreview.total_row_count} rows detected in this worksheet.</p>
+                {STANDARD_FIELDS.map((field) => (
+                  <div key={field} className={styles.mappingRow}>
+                    <label>
+                      {FIELD_LABELS[field]}
+                      {OPTIONAL_FIELDS.includes(field) && <span className={styles.muted}> (optional)</span>}
+                    </label>
+                    <select
+                      value={excelMapping[field] ?? ""}
+                      onChange={(e) =>
+                        setExcelMapping((prev) => ({ ...prev, [field]: e.target.value || null }))
+                      }
+                    >
+                      <option value="">
+                        {OPTIONAL_FIELDS.includes(field) ? "-- Not in workbook --" : "-- Select column --"}
+                      </option>
+                      {excelPreview.detected_columns.map((col) => (
+                        <option key={col} value={col}>
+                          {col}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+                <button
+                  className={styles.primaryButton}
+                  onClick={handleSaveExcelMapping}
+                  disabled={isExcelBusy || !excelRequiredFieldsMapped}
+                >
+                  Save mapping
+                </button>
+              </div>
+            )}
+
+            {excelStatus.has_confirmed_mapping && (
+              <div className={styles.syncBlock}>
+                <p className={styles.muted}>
+                  {excelStatus.last_synced_at
+                    ? `Last synced: ${new Date(excelStatus.last_synced_at).toLocaleString()}`
+                    : "Never synced yet."}
+                </p>
+                {excelStatus.last_sync_error && (
+                  <p className={styles.error}>Last error: {excelStatus.last_sync_error}</p>
+                )}
+                <button className={styles.primaryButton} onClick={handleExcelSync} disabled={isExcelBusy}>
+                  {isExcelBusy ? "Syncing…" : "Sync Now"}
+                </button>
+              </div>
+            )}
+
+            {excelSyncResult && (
+              <div className={styles.syncResult}>
+                <p>
+                  Imported <strong>{excelSyncResult.imported_row_count}</strong>, skipped{" "}
+                  <strong>{excelSyncResult.skipped_duplicate_count}</strong> duplicate
+                  {excelSyncResult.skipped_duplicate_count === 1 ? "" : "s"}, failed{" "}
+                  <strong>{excelSyncResult.failed_row_count}</strong> out of{" "}
+                  {excelSyncResult.total_row_count} rows.
+                </p>
+                {excelSyncResult.row_errors.length > 0 && (
+                  <ul className={styles.rowErrors}>
+                    {excelSyncResult.row_errors.slice(0, 5).map((e) => (
+                      <li key={e.row_number}>
+                        Row {e.row_number}: {e.errors.join(", ")}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {excelError && <p className={styles.error}>{excelError}</p>}
       </div>
 
       <div className={styles.card}>
