@@ -148,6 +148,18 @@ def get_analytics_products(
 
     # Single grouped aggregation by product -- every per-product number
     # (units, revenue, cost, profit, count) comes from this one query.
+    #
+    # Step 11, Batch 11.7 (performance-at-scale audit note, not a fix):
+    # this pulls every distinct product for the business into memory
+    # before the four rankings below are sorted and sliced to `limit` in
+    # Python -- correct today, but for a business with an unusually
+    # large number of distinct product names, four separate queries
+    # (one per ranking, each with its own ORDER BY + LIMIT pushed to the
+    # database) would scale better than fetching everything up front.
+    # Left as-is here since the current behavior is correct and this
+    # audit's mandate is fixing bugs, not rewriting working endpoints --
+    # worth revisiting if a business's distinct-product count ever
+    # becomes large enough for this to show up in practice.
     rows = (
         db.query(
             Transaction.product.label("product"),
