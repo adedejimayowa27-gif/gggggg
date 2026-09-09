@@ -163,8 +163,37 @@ class TestMainUserJourney:
         assert len(result["row_errors"]) == 1
         assert result["row_errors"][0]["row_number"] == 3
 
+        # --- re-uploading the exact same file must not double the data ---
+        # Regression coverage for a real bug found in Step 11's audit:
+        # execute_confirmed_import had no duplicate check at all (unlike
+        # sheets_sync.sync_now, which always had one) -- re-uploading the
+        # same file would have silently created a second copy of every
+        # transaction. If this ever regresses, the analytics assertion
+        # below (revenue == 150.00, not 300.00) is what would catch it.
+        reupload_resp = client.post(
+            f"/businesses/{business_id}/imports/upload",
+            files={"file": ("sales.csv", io.BytesIO(_sample_csv()), "text/csv")},
+            headers=headers,
+        )
+        reimport_id = reupload_resp.json()["id"]
+        reconfirm_resp = client.post(
+            f"/businesses/{business_id}/imports/{reimport_id}/confirm",
+            json={"mapping": mapping},
+            headers=headers,
+        )
+        assert reconfirm_resp.status_code == 202, reconfirm_resp.text
+        redup_result = client.get(
+            f"/businesses/{business_id}/imports/{reimport_id}", headers=headers
+        ).json()
+        assert redup_result["status"] == "completed"
+        assert redup_result["imported_row_count"] == 0  # both valid rows were duplicates
+        assert redup_result["skipped_duplicate_count"] == 2
+        assert redup_result["failed_row_count"] == 1  # the bad row still fails validation either way
+
         # --- analytics reflect exactly the imported data ---
         # 10*10.00 + 5*10.00 = 150.00 revenue; 10*4.00 + 5*4.00 = 60.00 cost
+        # (NOT doubled by the re-upload above -- that's the point of the
+        # duplicate check just exercised.)
         summary_resp = client.get(
             f"/businesses/{business_id}/analytics/summary",
             params={"range": "custom", "start_date": "2026-01-01", "end_date": "2026-01-31"},
