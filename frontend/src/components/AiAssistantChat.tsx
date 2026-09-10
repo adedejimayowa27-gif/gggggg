@@ -186,7 +186,7 @@ export default function AiAssistantChat({ businessId }: Props) {
             </div>
           ) : loadError ? (
             <div className={styles.centerFill}>
-              <p style={{ color: "#ff6b6b" }}>{loadError}</p>
+              <p style={{ color: "var(--clay)" }}>{loadError}</p>
             </div>
           ) : !hasMessages ? (
             <div className={styles.centerFill}>
