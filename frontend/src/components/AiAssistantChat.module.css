@@ -3,7 +3,7 @@
   flex-direction: column;
   height: calc(100vh - 220px);
   min-height: 420px;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-radius: 10px;
   background: #11151d;
   overflow: hidden;
@@ -54,8 +54,8 @@
 .suggestionChip {
   padding: 0.5rem 0.9rem;
   border-radius: 999px;
-  border: 1px solid #1f2430;
-  background: #151922;
+  border: 1px solid var(--surface-border);
+  background: var(--surface);
   color: var(--foreground);
   font-size: 0.8rem;
   cursor: pointer;
@@ -105,7 +105,7 @@
 .bubbleAssistant {
   background: #171b25;
   color: var(--foreground);
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-bottom-left-radius: 4px;
 }
 
@@ -114,13 +114,13 @@
 }
 
 .bubbleFailed {
-  border: 1px solid #ff6b6b;
+  border: 1px solid var(--clay);
 }
 
 .bubbleFailedText {
   margin-top: 0.3rem;
   font-size: 0.72rem;
-  color: #ff6b6b;
+  color: var(--clay);
 }
 
 .bubbleTime {
@@ -169,15 +169,15 @@
   align-items: flex-end;
   gap: 0.6rem;
   padding: 0.85rem;
-  border-top: 1px solid #1f2430;
-  background: #0d1017;
+  border-top: 1px solid var(--surface-border);
+  background: var(--ink-raised);
 }
 
 .textarea {
   flex: 1;
   resize: none;
-  background: #151922;
-  border: 1px solid #2a2f3a;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
   color: var(--foreground);
@@ -216,9 +216,9 @@
 .sendError {
   padding: 0.5rem 0.85rem;
   font-size: 0.78rem;
-  color: #ff6b6b;
-  border-top: 1px solid #1f2430;
-  background: #0d1017;
+  color: var(--clay);
+  border-top: 1px solid var(--surface-border);
+  background: var(--ink-raised);
 }
 
 @media (max-width: 640px) {
