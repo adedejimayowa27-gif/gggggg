@@ -53,7 +53,7 @@
 }
 
 .error {
-  color: #ff6b6b;
+  color: var(--clay);
   font-size: 0.85rem;
   margin-bottom: 0.5rem;
 }
@@ -100,7 +100,7 @@
 }
 
 .severity_LOW {
-  background: #8a92a6;
+  background: var(--sage);
 }
 
 .itemBody {
