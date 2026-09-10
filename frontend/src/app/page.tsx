@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import InstallAppButton from "@/components/InstallAppButton";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -8,6 +9,7 @@ export default function Home() {
       <nav className={styles.nav}>
         <Logo />
         <div className={styles.navActions}>
+          <InstallAppButton />
           <Link href="/login" className={styles.navLogin}>
             Log in
           </Link>
