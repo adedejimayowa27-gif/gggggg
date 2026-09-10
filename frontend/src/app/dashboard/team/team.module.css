@@ -22,7 +22,7 @@
 .input {
   flex: 1 1 240px;
   padding: 0.5rem 0.75rem;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-radius: 6px;
   background: #10131b;
   color: inherit;
@@ -30,7 +30,7 @@
 
 .select {
   padding: 0.5rem 0.75rem;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-radius: 6px;
   background: #10131b;
   color: inherit;
@@ -58,7 +58,7 @@
 }
 
 .list {
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -107,7 +107,7 @@
   font-weight: 600;
   padding: 0.15rem 0.6rem;
   border-radius: 999px;
-  background: #1f2430;
+  background: var(--surface-border);
   text-transform: capitalize;
 }
 
