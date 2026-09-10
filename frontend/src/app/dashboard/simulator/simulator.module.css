@@ -72,7 +72,7 @@
 }
 
 .error {
-  color: #ff6b6b;
+  color: var(--clay);
   font-size: 0.85rem;
   margin-top: 0.5rem;
 }
@@ -167,7 +167,7 @@
 .deleteButton {
   border: none;
   background: transparent;
-  color: #ff6b6b;
+  color: var(--clay);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0 0.5rem;
