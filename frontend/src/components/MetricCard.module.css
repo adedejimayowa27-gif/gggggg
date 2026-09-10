@@ -4,7 +4,7 @@
   gap: 0.6rem;
   padding: 1.25rem;
   border-radius: 10px;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   background: #11151d;
   min-width: 0;
 }
@@ -13,7 +13,7 @@
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: #1a2236;
+  background: var(--surface-active);
   color: var(--accent);
   display: flex;
   align-items: center;
