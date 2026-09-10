@@ -17,7 +17,7 @@
   margin-top: 0.4rem;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  background: #1a2236;
+  background: var(--surface-active);
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 500;
@@ -26,7 +26,7 @@
 .newBusinessButton {
   padding: 0.5rem 0.9rem;
   border-radius: 6px;
-  border: 1px solid #2a2f3a;
+  border: 1px solid var(--surface-border);
   background: transparent;
   color: var(--foreground);
   font-size: 0.85rem;
@@ -88,7 +88,7 @@
   max-width: 420px;
   padding: 2rem;
   border-radius: 10px;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   background: #11151d;
 }
 
@@ -113,8 +113,8 @@
 .input {
   padding: 0.6rem 0.75rem;
   border-radius: 6px;
-  border: 1px solid #2a2f3a;
-  background: #151922;
+  border: 1px solid var(--surface-border);
+  background: var(--surface);
   color: var(--foreground);
   font-size: 1rem;
 }
@@ -131,7 +131,7 @@
 }
 
 .error {
-  color: #ff6b6b;
+  color: var(--clay);
   font-size: 0.875rem;
   margin-top: 0.5rem;
 }
