@@ -4,41 +4,6 @@
   flex-direction: column;
 }
 
-/* ---------- Nav ---------- */
-
-.nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.5rem clamp(1.25rem, 5vw, 4rem);
-}
-
-.navActions {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.navLogin {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--paper);
-}
-
-.navCta {
-  padding: 0.55rem 1.15rem;
-  border-radius: var(--radius-sm);
-  background: var(--gold);
-  color: var(--ink);
-  font-weight: 700;
-  font-size: 0.9rem;
-  transition: background 0.15s ease;
-}
-
-.navCta:hover {
-  background: var(--gold-deep);
-}
-
 /* ---------- Hero ---------- */
 
 .hero {
@@ -119,12 +84,6 @@
 .heroVisual {
   display: flex;
   justify-content: center;
-}
-
-.heroVisual svg {
-  width: 100%;
-  height: auto;
-  max-width: 420px;
 }
 
 /* ---------- How it works ---------- */
@@ -216,10 +175,6 @@
 
   .heroVisual {
     order: -1;
-  }
-
-  .heroVisual svg {
-    max-width: 280px;
   }
 
   .stepGrid {
