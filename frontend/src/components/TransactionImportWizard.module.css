@@ -30,7 +30,7 @@
   display: inline-block;
   padding: 0.65rem 1.25rem;
   border-radius: 8px;
-  border: 1px solid #2a2f3a;
+  border: 1px solid var(--surface-border);
   background: transparent;
   color: var(--foreground);
   font-size: 0.9rem;
@@ -62,7 +62,7 @@
 }
 
 .error {
-  color: #ff6b6b;
+  color: var(--clay);
   font-size: 0.875rem;
   margin-top: 1rem;
 }
@@ -79,7 +79,7 @@
 
 .tableWrap {
   overflow-x: auto;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
 }
 
@@ -96,7 +96,7 @@
   background: #11151d;
   color: var(--muted);
   font-weight: 600;
-  border-bottom: 1px solid #1f2430;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .table td {
@@ -132,8 +132,8 @@
 .select {
   padding: 0.5rem 0.6rem;
   border-radius: 6px;
-  border: 1px solid #2a2f3a;
-  background: #151922;
+  border: 1px solid var(--surface-border);
+  background: var(--surface);
   color: var(--foreground);
   font-size: 0.9rem;
 }
@@ -160,7 +160,7 @@
   margin-left: 0.75rem;
   padding: 0.7rem 1.25rem;
   border-radius: 8px;
-  border: 1px solid #2a2f3a;
+  border: 1px solid var(--surface-border);
   background: transparent;
   color: var(--foreground);
   font-size: 0.9rem;
@@ -177,7 +177,7 @@
 .resultStat {
   padding: 1rem 1.25rem;
   border-radius: 8px;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   background: #11151d;
   min-width: 140px;
 }
@@ -198,13 +198,13 @@
 }
 
 .failValue {
-  color: #ff6b6b;
+  color: var(--clay);
 }
 
 .errorList {
   max-height: 260px;
   overflow-y: auto;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
 }
 
