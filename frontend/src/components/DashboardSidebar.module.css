@@ -2,22 +2,13 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #0d1017;
-  border-right: 1px solid #1f2430;
+  background: var(--ink-raised);
+  border-right: 1px solid var(--surface-border);
   padding: 1.25rem 0.75rem;
 }
 
 .brand {
   padding: 0.5rem 0.75rem 1.5rem;
-}
-
-.brandMark {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--foreground);
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-  display: block;
 }
 
 .navList {
@@ -33,20 +24,20 @@
   justify-content: space-between;
   padding: 0.65rem 0.75rem;
   border-radius: 8px;
-  color: var(--muted);
+  color: var(--sage);
   font-size: 0.9rem;
   font-weight: 500;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
 .navLink:hover {
-  background: #161b26;
-  color: var(--foreground);
+  background: var(--surface);
+  color: var(--paper);
 }
 
 .navLinkActive {
-  background: #1a2236;
-  color: var(--foreground);
+  background: var(--surface);
+  color: var(--gold);
 }
 
 .navLinkDisabled {
@@ -58,8 +49,8 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--muted);
-  background: #1f2430;
+  color: var(--sage);
+  background: var(--surface);
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
 }
