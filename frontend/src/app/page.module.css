@@ -1,0 +1,228 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Nav ---------- */
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem clamp(1.25rem, 5vw, 4rem);
+}
+
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.navLogin {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--paper);
+}
+
+.navCta {
+  padding: 0.55rem 1.15rem;
+  border-radius: var(--radius-sm);
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: background 0.15s ease;
+}
+
+.navCta:hover {
+  background: var(--gold-deep);
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(2rem, 5vw, 5rem);
+  padding: clamp(1rem, 6vw, 3rem) clamp(1.25rem, 5vw, 4rem) clamp(3rem, 8vw, 6rem);
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.heroCopy {
+  max-width: 34rem;
+}
+
+.heroHeadline {
+  font-size: clamp(2.25rem, 5vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--paper);
+}
+
+.heroSub {
+  margin-top: 1.25rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--sage);
+  max-width: 32rem;
+}
+
+.heroActions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.primaryButton {
+  padding: 0.85rem 1.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 1rem;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.primaryButton:hover {
+  background: var(--gold-deep);
+}
+
+.primaryButton:active {
+  transform: translateY(1px);
+}
+
+.secondaryLink {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--paper);
+  border-bottom: 1px solid var(--surface-border);
+  padding-bottom: 0.15rem;
+  transition: border-color 0.15s ease;
+}
+
+.secondaryLink:hover {
+  border-color: var(--gold);
+}
+
+.trustLine {
+  margin-top: 2rem;
+  font-size: 0.85rem;
+  color: var(--sage);
+}
+
+.heroVisual {
+  display: flex;
+  justify-content: center;
+}
+
+.heroVisual svg {
+  width: 100%;
+  height: auto;
+  max-width: 420px;
+}
+
+/* ---------- How it works ---------- */
+
+.howItWorks {
+  padding: clamp(2rem, 6vw, 3rem) clamp(1.25rem, 5vw, 4rem) clamp(4rem, 8vw, 6rem);
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  border-top: 1px solid var(--surface-border);
+}
+
+.stepGrid {
+  margin-top: 2.5rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(2rem, 4vw, 3rem);
+}
+
+.sectionHeading {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.step {
+  border-top: 2px solid var(--gold);
+  padding-top: 1.25rem;
+}
+
+.stepTitle {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.stepBody {
+  margin-top: 0.6rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--sage);
+}
+
+/* ---------- Closing CTA ---------- */
+
+.closing {
+  padding: clamp(3rem, 8vw, 5rem) clamp(1.25rem, 5vw, 4rem);
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border-top: 1px solid var(--surface-border);
+}
+
+.closingHeadline {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  color: var(--paper);
+  max-width: 28rem;
+}
+
+/* ---------- Footer ---------- */
+
+.footer {
+  margin-top: auto;
+  padding: 1.5rem clamp(1.25rem, 5vw, 4rem) 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--surface-border);
+}
+
+.footerNote {
+  font-size: 0.82rem;
+  color: var(--sage);
+}
+
+@media (max-width: 860px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .heroVisual {
+    order: -1;
+  }
+
+  .heroVisual svg {
+    max-width: 280px;
+  }
+
+  .stepGrid {
+    grid-template-columns: 1fr;
+  }
+}
