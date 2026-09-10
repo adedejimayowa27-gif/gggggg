@@ -19,7 +19,7 @@
 }
 
 .list {
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   overflow: hidden;
 }
