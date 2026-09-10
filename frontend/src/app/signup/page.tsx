@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
+import Logo from "@/components/Logo";
+import styles from "@/styles/auth.module.css";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -31,111 +33,71 @@ export default function SignupPage() {
   };
 
   return (
-    <main style={styles.main}>
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <h1 style={styles.heading}>Create your account</h1>
+    <main className={styles.page}>
+      <div className={styles.topNav}>
+        <Link href="/">
+          <Logo />
+        </Link>
+      </div>
 
-        <label style={styles.label}>
-          Full name (optional)
-          <input
-            style={styles.input}
-            type="text"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-          />
-        </label>
+      <div className={styles.wrap}>
+        <div className={styles.card}>
+          <div>
+            <h1 className={styles.heading}>Create your account</h1>
+            <p className={styles.subheading}>
+              Free to start -- bring in your sales data in a couple of minutes.
+            </p>
+          </div>
 
-        <label style={styles.label}>
-          Email
-          <input
-            style={styles.input}
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </label>
+          <form onSubmit={handleSubmit} className={styles.form}>
+            <label className={styles.label}>
+              Full name (optional)
+              <input
+                className={styles.input}
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Your name"
+              />
+            </label>
 
-        <label style={styles.label}>
-          Password
-          <input
-            style={styles.input}
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
+            <label className={styles.label}>
+              Email
+              <input
+                className={styles.input}
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </label>
 
-        {error && <p style={styles.error}>{error}</p>}
+            <label className={styles.label}>
+              Password
+              <input
+                className={styles.input}
+                type="password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+            </label>
 
-        <button style={styles.button} type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Creating account…" : "Sign up"}
-        </button>
+            {error && <p className={styles.error}>{error}</p>}
 
-        <p style={styles.footerText}>
-          Already have an account? <Link href="/login">Log in</Link>
-        </p>
-      </form>
+            <button className={styles.button} type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Creating account…" : "Sign up"}
+            </button>
+          </form>
+
+          <p className={styles.footerText}>
+            Already have an account? <Link href="/login">Log in</Link>
+          </p>
+        </div>
+      </div>
     </main>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  main: {
-    minHeight: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "2rem",
-  },
-  form: {
-    width: "100%",
-    maxWidth: 380,
-    display: "flex",
-    flexDirection: "column",
-    gap: "1rem",
-  },
-  heading: {
-    fontSize: "1.5rem",
-    fontWeight: 700,
-    marginBottom: "0.5rem",
-  },
-  label: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.35rem",
-    fontSize: "0.875rem",
-    color: "var(--muted)",
-  },
-  input: {
-    padding: "0.6rem 0.75rem",
-    borderRadius: 6,
-    border: "1px solid #2a2f3a",
-    background: "#151922",
-    color: "var(--foreground)",
-    fontSize: "1rem",
-  },
-  button: {
-    padding: "0.7rem",
-    borderRadius: 6,
-    border: "none",
-    background: "var(--accent)",
-    color: "#fff",
-    fontSize: "1rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    marginTop: "0.5rem",
-  },
-  error: {
-    color: "#ff6b6b",
-    fontSize: "0.875rem",
-  },
-  footerText: {
-    fontSize: "0.875rem",
-    color: "var(--muted)",
-    textAlign: "center",
-    marginTop: "0.5rem",
-  },
-};
