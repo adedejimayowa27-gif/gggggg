@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Logo from "@/components/Logo";
 import styles from "./DashboardSidebar.module.css";
 
 interface NavItem {
@@ -34,7 +35,7 @@ export default function DashboardSidebar({ onNavigate }: Props) {
   return (
     <nav className={styles.sidebar} aria-label="Dashboard navigation">
       <div className={styles.brand}>
-        <span className={styles.brandMark}>Mayorcity Bizintel</span>
+        <Logo size={22} />
       </div>
 
       <ul className={styles.navList}>
