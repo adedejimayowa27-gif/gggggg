@@ -1,24 +1,31 @@
 :root {
-  /* Step 12 (UI polish): a palette grounded in the product itself --
-     ink-green dark rather than the generic blue-black dark-mode
-     default, gold as the accent (clarity / prosperity / growth, for an
-     app whose whole job is making a small business's own money legible
-     to them) rather than a generic SaaS blue. Kept as CSS variables
-     (not hardcoded per-component) specifically so this palette applies
-     consistently everywhere that already reads from these tokens.
+  /* Redesign: a serious dark-navy BI foundation rather than the
+     previous ink-green base -- deep and slightly desaturated so it
+     reads as a data product, not a "dark mode toggle" blue. Gold stays
+     the one brand accent, but used sparingly (restrained, not as a
+     decorative wash); blue/purple exist ONLY for data visualization
+     (chart lines, the forecast band) so a glance at any chart is
+     visually distinct from a glance at a brand/CTA element.
   */
-  --ink: #10140f;
-  --ink-raised: #171d16;
-  --surface: #1c231b;
-  --surface-border: #2b3328;
-  --paper: #f3f0e6;
-  --sage: #94a08e;
-  --gold: #e1a335;
-  --gold-deep: #b9822a;
-  --clay: #c8593f;
-  --clay-deep: #a84631;
-  --leaf: #5c9a6f;
-  --surface-active: #242b21;
+  --ink: #0a0e17;
+  --ink-raised: #0e1421;
+  --surface: #131a2b;
+  --surface-border: #232c42;
+  --paper: #eef1f8;
+  --sage: #8992ab;
+
+  --gold: #e3a93e;
+  --gold-deep: #bd8827;
+
+  /* Data-visualization accents -- never used for brand/UI chrome,
+     only inside charts/mockups, so their meaning stays consistent. */
+  --viz-blue: #6c8eef;
+  --viz-purple: #9b7ede;
+
+  --clay: #d1654a;
+  --clay-deep: #ac5039;
+  --leaf: #4fa876;
+  --surface-active: #1a2338;
 
   /* Kept for any component still reading the old names -- same values
      as their nearest new token, so nothing silently goes untouched. */
@@ -31,8 +38,17 @@
   --font-body: var(--font-manrope), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
 }
 
 * {
@@ -55,6 +71,7 @@ body {
 
 h1, h2, h3, h4 {
   font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 a {
@@ -65,6 +82,45 @@ a {
 :focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
+}
+
+/* Fine grid texture -- applied deliberately (via this class), not
+   globally on body, per the brief's "only where useful" instruction.
+   Two hairline repeating-gradients form an evenly-spaced grid at very
+   low opacity, meant to read as "technical/precise" from a distance
+   without ever being consciously noticed up close. */
+.bgGrid {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(238, 241, 248, 0.035) 0px, rgba(238, 241, 248, 0.035) 1px, transparent 1px, transparent 40px),
+    repeating-linear-gradient(90deg, rgba(238, 241, 248, 0.035) 0px, rgba(238, 241, 248, 0.035) 1px, transparent 1px, transparent 40px);
+}
+
+/* Fine noise texture -- a tiled, low-opacity SVG turbulence filter.
+   Breaks up the flat navy so large dark areas don't look like a solid
+   color fill; deliberately subtle enough to disappear at normal
+   viewing distance. */
+.bgNoise {
+  position: relative;
+}
+
+.bgNoise::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Restrained glassmorphism utility -- used only for the nav-on-scroll
+   and the dashboard mockup's alert card (see the brief: "only where
+   useful"), never as a blanket treatment on ordinary content cards. */
+.glass {
+  background: rgba(19, 26, 43, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(238, 241, 248, 0.08);
 }
 
 @media (prefers-reduced-motion: reduce) {
