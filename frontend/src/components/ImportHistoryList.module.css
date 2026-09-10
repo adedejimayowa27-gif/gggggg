@@ -3,7 +3,7 @@
 }
 
 .list {
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -70,7 +70,7 @@
 
 .badgeFailed {
   background: rgba(255, 107, 107, 0.15);
-  color: #ff6b6b;
+  color: var(--clay);
 }
 
 .badgePending {
@@ -82,6 +82,6 @@
   padding: 2rem;
   text-align: center;
   color: var(--muted);
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
 }
