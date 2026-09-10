@@ -144,18 +144,18 @@ export default function RevenueProfitChart({ businessId, dateRange, token }: Pro
         ) : (
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="#1f2430" vertical={false} />
+              <CartesianGrid stroke="var(--surface-border)" vertical={false} />
               <XAxis
                 dataKey="period_start"
                 tickFormatter={formatAxisDate}
-                stroke="#8a92a6"
+                stroke="var(--sage)"
                 tick={{ fontSize: 12 }}
                 tickLine={false}
-                axisLine={{ stroke: "#1f2430" }}
+                axisLine={{ stroke: "var(--surface-border)" }}
               />
               <YAxis
                 tickFormatter={(v) => formatCurrencyShort(Number(v))}
-                stroke="#8a92a6"
+                stroke="var(--sage)"
                 tick={{ fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
@@ -163,8 +163,8 @@ export default function RevenueProfitChart({ businessId, dateRange, token }: Pro
               />
               <Tooltip
                 contentStyle={{
-                  background: "#151922",
-                  border: "1px solid #2a2f3a",
+                  background: "var(--surface)",
+                  border: "1px solid var(--surface-border)",
                   borderRadius: 8,
                   fontSize: 13,
                 }}
@@ -175,12 +175,12 @@ export default function RevenueProfitChart({ businessId, dateRange, token }: Pro
                 ]}
               />
               <Legend wrapperStyle={{ display: "none" }} />
-              <Bar dataKey="revenue" name="revenue" fill="#4f7cff" radius={[4, 4, 0, 0]} maxBarSize={36} />
+              <Bar dataKey="revenue" name="revenue" fill="var(--gold)" radius={[4, 4, 0, 0]} maxBarSize={36} />
               <Line
                 dataKey="gross_profit"
                 name="gross_profit"
                 type="monotone"
-                stroke="#33d69f"
+                stroke="var(--leaf)"
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4 }}
