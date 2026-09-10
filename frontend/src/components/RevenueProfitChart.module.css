@@ -4,7 +4,7 @@
   gap: 1rem;
   padding: 1.25rem;
   border-radius: 10px;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
   background: #11151d;
 }
 
@@ -27,7 +27,7 @@
   padding: 0.2rem;
   border-radius: 8px;
   background: #0f1420;
-  border: 1px solid #1f2430;
+  border: 1px solid var(--surface-border);
 }
 
 .granularityButton {
@@ -42,7 +42,7 @@
 }
 
 .granularityButtonActive {
-  background: #1a2236;
+  background: var(--surface-active);
   color: var(--foreground);
 }
 
@@ -68,11 +68,11 @@
 }
 
 .swatchRevenue {
-  background: #4f7cff;
+  background: var(--gold);
 }
 
 .swatchProfit {
-  background: #33d69f;
+  background: var(--leaf);
   border-radius: 999px;
 }
 
