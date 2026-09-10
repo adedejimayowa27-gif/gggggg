@@ -1,23 +1,13 @@
 import Link from "next/link";
 import Logo from "@/components/Logo";
-import InstallAppButton from "@/components/InstallAppButton";
+import LandingNav from "@/components/LandingNav";
+import DashboardMockup from "@/components/DashboardMockup";
 import styles from "./page.module.css";
 
 export default function Home() {
   return (
     <main className={styles.page}>
-      <nav className={styles.nav}>
-        <Logo />
-        <div className={styles.navActions}>
-          <InstallAppButton />
-          <Link href="/login" className={styles.navLogin}>
-            Log in
-          </Link>
-          <Link href="/signup" className={styles.navCta}>
-            Get started
-          </Link>
-        </div>
-      </nav>
+      <LandingNav />
 
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
@@ -40,34 +30,8 @@ export default function Home() {
           </p>
         </div>
 
-        <div className={styles.heroVisual} aria-hidden="true">
-          <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="heroFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#E1A335" stopOpacity="0.18" />
-                <stop offset="100%" stopColor="#E1A335" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M20 320 L100 280 L180 230 L260 150 L340 60 L340 380 L20 380 Z"
-              fill="url(#heroFill)"
-            />
-            <path
-              d="M20 320 L100 280 L180 230 L260 150 L340 60"
-              fill="none"
-              stroke="#E1A335"
-              strokeWidth="5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <circle cx="20" cy="320" r="6" fill="#E1A335" />
-            <circle cx="100" cy="280" r="7" fill="#E1A335" />
-            <circle cx="180" cy="230" r="8" fill="#E1A335" />
-            <circle cx="260" cy="150" r="9" fill="#E1A335" />
-            <circle cx="340" cy="60" r="11" fill="#E1A335" />
-            <circle cx="300" cy="220" r="7" fill="#5C9A6F" />
-            <circle cx="120" cy="110" r="6" fill="#C8593F" />
-          </svg>
+        <div className={styles.heroVisual}>
+          <DashboardMockup />
         </div>
       </section>
 
