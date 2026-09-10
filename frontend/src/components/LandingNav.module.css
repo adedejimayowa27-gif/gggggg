@@ -1,0 +1,74 @@
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem clamp(1.25rem, 5vw, 4rem);
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  transition: background 0.25s ease, border-color 0.25s ease, backdrop-filter 0.25s ease,
+    padding 0.25s ease;
+}
+
+/* Glassmorphism used deliberately here, and only here on the nav --
+   it's the one place a translucent, blurred surface earns its keep:
+   content scrolls underneath a persistent, legible bar. */
+.navScrolled {
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+  background: rgba(10, 14, 23, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom-color: var(--surface-border);
+}
+
+.logoLink {
+  display: inline-flex;
+}
+
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.installButton {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .installButton {
+    display: inline-flex;
+  }
+}
+
+.navLogin {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--sage);
+  transition: color 0.15s ease;
+}
+
+.navLogin:hover {
+  color: var(--paper);
+}
+
+.navCta {
+  padding: 0.55rem 1.2rem;
+  border-radius: var(--radius-sm);
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.88rem;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.navCta:hover {
+  background: var(--gold-deep);
+}
+
+.navCta:active {
+  transform: translateY(1px);
+}
