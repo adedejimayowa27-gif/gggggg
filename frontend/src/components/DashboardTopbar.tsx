@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
+import InstallAppButton from "@/components/InstallAppButton";
 import styles from "./DashboardTopbar.module.css";
 
 interface Props {
@@ -46,6 +47,7 @@ export default function DashboardTopbar({ onMenuToggle }: Props) {
       </div>
 
       <div className={styles.right}>
+        <InstallAppButton className={styles.installButton} />
         <span className={styles.userEmail}>{user?.email}</span>
         <button className={styles.logoutButton} onClick={() => logout()}>
           Log out
