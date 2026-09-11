@@ -33,3 +33,15 @@
   color: var(--sage);
   letter-spacing: -0.01em;
 }
+
+/* Opt-in via Logo's `responsive` prop -- hides the wordmark text below
+   a narrow width, keeping just the mark icon, so a nav bar with other
+   controls next to it (see LandingNav) doesn't crowd/wrap on small
+   phones. Not applied by default: other places Logo is used (the
+   sidebar, auth pages, footer) have different space constraints and
+   should keep the full wordmark unless they opt in too. */
+@media (max-width: 420px) {
+  .responsiveWordmark {
+    display: none;
+  }
+}
