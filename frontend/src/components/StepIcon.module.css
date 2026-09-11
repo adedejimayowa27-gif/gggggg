@@ -1,0 +1,21 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+}
+
+.tintGold {
+  background: rgba(227, 169, 62, 0.14);
+}
+
+.tintBlue {
+  background: rgba(108, 142, 239, 0.14);
+}
+
+.tintPurple {
+  background: rgba(155, 126, 222, 0.14);
+}
