@@ -25,7 +25,7 @@ export default function LandingNav() {
   return (
     <nav className={`${styles.nav} ${isScrolled ? styles.navScrolled : ""}`}>
       <Link href="/" className={styles.logoLink}>
-        <Logo />
+        <Logo responsive />
       </Link>
       <div className={styles.navActions}>
         <InstallAppButton className={styles.installButton} />
