@@ -109,9 +109,16 @@
   color: var(--paper);
 }
 
+.sectionSub {
+  margin-top: 0.6rem;
+  font-size: 0.98rem;
+  color: var(--sage);
+  max-width: 32rem;
+}
+
 .step {
-  border-top: 2px solid var(--gold);
-  padding-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .stepTitle {
