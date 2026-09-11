@@ -119,6 +119,11 @@
 .step {
   display: flex;
   flex-direction: column;
+  transition: transform 0.2s ease;
+}
+
+.step:hover {
+  transform: translateY(-3px);
 }
 
 .stepTitle {
