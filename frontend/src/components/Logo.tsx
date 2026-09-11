@@ -19,9 +19,13 @@ interface Props {
   variant?: "full" | "mark";
   size?: number;
   className?: string;
+  /** Hides the wordmark text below ~420px, keeping just the mark icon
+   * -- see Logo.module.css's .responsiveWordmark for why this is opt-in
+   * rather than the default for every usage. */
+  responsive?: boolean;
 }
 
-export default function Logo({ variant = "full", size = 28, className }: Props) {
+export default function Logo({ variant = "full", size = 28, className, responsive = false }: Props) {
   const mark = (
     <svg
       width={size}
@@ -48,7 +52,7 @@ export default function Logo({ variant = "full", size = 28, className }: Props) 
   return (
     <span className={`${styles.lockup} ${className ?? ""}`}>
       <span className={styles.mark}>{mark}</span>
-      <span className={styles.wordmark}>
+      <span className={`${styles.wordmark} ${responsive ? styles.responsiveWordmark : ""}`}>
         <span className={styles.wordPrimary}>Mayorcity</span>
         <span className={styles.wordSecondary}>Bizintel</span>
       </span>
