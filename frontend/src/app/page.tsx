@@ -2,6 +2,7 @@ import Link from "next/link";
 import Logo from "@/components/Logo";
 import LandingNav from "@/components/LandingNav";
 import DashboardMockup from "@/components/DashboardMockup";
+import StepIcon from "@/components/StepIcon";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -37,8 +38,13 @@ export default function Home() {
 
       <section className={styles.howItWorks} id="how-it-works">
         <h2 className={styles.sectionHeading}>How it works</h2>
+        <p className={styles.sectionSub}>
+          Three steps between a spreadsheet full of transactions and knowing exactly where your
+          business stands.
+        </p>
         <div className={styles.stepGrid}>
           <div className={styles.step}>
+            <StepIcon variant="import" />
             <h3 className={styles.stepTitle}>Bring in your data</h3>
             <p className={styles.stepBody}>
               Upload a spreadsheet, or connect Google Sheets or OneDrive once. After that,
@@ -47,6 +53,7 @@ export default function Home() {
             </p>
           </div>
           <div className={styles.step}>
+            <StepIcon variant="analyze" />
             <h3 className={styles.stepTitle}>See what&apos;s actually happening</h3>
             <p className={styles.stepBody}>
               Revenue, cost, and profit broken down by product, category, and time period -- the
@@ -54,6 +61,7 @@ export default function Home() {
             </p>
           </div>
           <div className={styles.step}>
+            <StepIcon variant="decide" />
             <h3 className={styles.stepTitle}>Decide with confidence</h3>
             <p className={styles.stepBody}>
               Try a price change or a slower month in the simulator before it happens for real,
