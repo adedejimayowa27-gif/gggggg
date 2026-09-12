@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Space_Grotesk } from "next/font/google";
+import { Manrope, Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
@@ -13,6 +13,17 @@ const spaceGrotesk = Space_Grotesk({
 const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-manrope",
+  display: "swap",
+});
+
+// Loaded specifically for the dashboard product UI (see .dashboardTheme in
+// globals.css) -- kept separate from Manrope (marketing/auth pages) rather
+// than replacing the whole site's type system, since the dashboard redesign
+// brief calls for a cleaner, more neutral workhorse face at data-dense
+// screens while the marketing site keeps its own distinct voice.
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-plus-jakarta",
   display: "swap",
 });
 
@@ -45,7 +56,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${manrope.variable}`}>
+    <html lang="en" className={`${spaceGrotesk.variable} ${manrope.variable} ${plusJakarta.variable}`}>
       <body>
         <AuthProvider>{children}</AuthProvider>
         <ServiceWorkerRegister />
