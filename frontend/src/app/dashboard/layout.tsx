@@ -40,7 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <>
             <div className={styles.overlay} onClick={() => setIsMobileNavOpen(false)} />
             <div className={`${styles.drawer} ${styles.drawerOpen}`}>
-              <DashboardSidebar onNavigate={() => setIsMobileNavOpen(false)} />
+              <DashboardSidebar forceExpanded onNavigate={() => setIsMobileNavOpen(false)} />
             </div>
           </>
         )}
