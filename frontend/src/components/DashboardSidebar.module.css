@@ -2,32 +2,151 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 232px;
   background: var(--ink-raised);
   border-right: 1px solid var(--surface-border);
-  padding: 1.25rem 0.75rem;
+  padding: var(--space-4) var(--space-3);
+  transition: width 0.2s ease;
+  overflow: hidden;
+}
+
+.sidebar.collapsed {
+  width: 68px;
+  align-items: center;
 }
 
 .brand {
-  padding: 0.5rem 0.75rem 1.5rem;
+  padding: 0.5rem 0.5rem 1rem;
+}
+
+/* ---------- Workspace selector ---------- */
+
+.workspaceWrap {
+  position: relative;
+  margin-bottom: var(--space-4);
+}
+
+.workspaceButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  color: var(--paper);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.workspaceButton:hover {
+  border-color: var(--gold);
+}
+
+.workspaceAvatar {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--gold);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspaceName {
+  flex: 1;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceChevron {
+  font-size: 0.7rem;
+  color: var(--sage);
+}
+
+.workspaceMenu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 0.35rem;
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.workspaceMenuItem {
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--paper);
+  background: transparent;
+  cursor: pointer;
+}
+
+.workspaceMenuItem:hover {
+  background: var(--surface-active);
+}
+
+/* ---------- Nav groups ---------- */
+
+.navScroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+.navGroup {
+  margin-bottom: var(--space-4);
+}
+
+.navGroupLabel {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sage);
+  padding: 0 0.6rem;
+  margin-bottom: 0.4rem;
 }
 
 .navList {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.15rem;
 }
 
 .navLink {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.65rem 0.75rem;
-  border-radius: 8px;
+  gap: 0.7rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--radius-md);
   color: var(--sage);
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   font-weight: 500;
   transition: background 0.15s ease, color 0.15s ease;
+}
+
+.collapsed .navLink {
+  justify-content: center;
+  padding: 0.55rem;
 }
 
 .navLink:hover {
@@ -35,22 +154,46 @@
   color: var(--paper);
 }
 
-.navLinkActive {
-  background: var(--surface);
+/* The one deliberately "loud" element in the sidebar, per the brief:
+   a subtle yellow pill for the active page -- everything else here
+   stays quiet (muted grey, no other accent color) so this stays the
+   single, unambiguous "you are here" signal. */
+.navLinkActive,
+.navLinkActive:hover {
+  background: rgba(255, 214, 10, 0.12);
   color: var(--gold);
 }
 
-.navLinkDisabled {
-  opacity: 0.55;
+/* ---------- Collapse toggle ---------- */
+
+.collapseToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  margin-top: var(--space-2);
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid var(--surface-border);
+  color: var(--sage);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.badge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--sage);
+.collapsed .collapseToggle {
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+.collapseToggle:hover {
   background: var(--surface);
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
+  color: var(--paper);
+}
+
+.collapseIcon {
+  font-size: 0.85rem;
+  line-height: 1;
 }
