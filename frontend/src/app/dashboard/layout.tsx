@@ -31,7 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <DashboardProvider>
-      <div className={styles.shell}>
+      <div className={`${styles.shell} dashboardTheme`}>
         <div className={styles.sidebarDesktop}>
           <DashboardSidebar />
         </div>
