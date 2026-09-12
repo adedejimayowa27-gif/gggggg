@@ -6,11 +6,17 @@
 }
 
 .sidebarDesktop {
-  width: 240px;
   flex-shrink: 0;
   display: none;
   height: 100%;
   overflow-y: auto;
+  /* No fixed width here deliberately -- DashboardSidebar itself sets
+     its own width (232px expanded, 68px collapsed) and toggles between
+     them via its own persisted state. A fixed width on this wrapper
+     would mean collapsing the sidebar shrinks only the nav visually
+     while this wrapper still reserved the full expanded width --
+     defeating the entire point of collapsing, which is reclaiming that
+     space for .content. */
 }
 
 .main {
