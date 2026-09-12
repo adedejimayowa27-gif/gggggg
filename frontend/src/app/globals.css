@@ -123,6 +123,87 @@ a {
   border: 1px solid rgba(238, 241, 248, 0.08);
 }
 
+/* ---------------------------------------------------------------------
+   Dashboard theme (product UI redesign) -- scoped to .dashboardTheme
+   (applied once, on the dashboard shell wrapper) rather than changing
+   the site-wide tokens above, since the marketing/auth pages keep their
+   own navy+gold identity. Everything under this class reads the same
+   variable *names* as the rest of the app (--ink, --gold, --surface,
+   etc.) with different values, so existing components (MetricCard,
+   charts, etc.) automatically pick up the new palette with no
+   per-component changes needed -- only the few things unique to this
+   redesign (the yellow-vs-gold distinction, the new radii, the ambient
+   gradient) are net-new below.
+------------------------------------------------------------------------ */
+.dashboardTheme {
+  /* Deep charcoal -- deliberately neutral (no blue or green tint),
+     distinct from the marketing site's navy/ink-green bases. */
+  --ink: #0b0c0f;
+  --ink-raised: #101114;
+  --surface: #15171b;
+  --surface-border: #24262c;
+  --paper: #f5f6f8;
+  --sage: #8b8d96;
+
+  /* Electric yellow -- brighter/more energetic than the marketing
+     site's muted gold, used the same restrained way: accents and
+     calls-to-action, never as a field of color. */
+  --gold: #ffd60a;
+  --gold-deep: #e6bf00;
+
+  --viz-blue: #5b8def;
+  --viz-purple: #a78bfa;
+  --leaf: #34d399;
+  --clay: #f87171;
+  --clay-deep: #dc5a5a;
+  --surface-active: #1c1f26;
+
+  --background: var(--ink);
+  --foreground: var(--paper);
+  --accent: var(--gold);
+  --muted: var(--sage);
+
+  --font-body: var(--font-plus-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: var(--font-plus-jakarta), "Segoe UI", sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  /* Establishes this element as the containing block + stacking context
+     for the ambient-gradient pseudo-element below -- without an explicit
+     position+z-index here, a fixed-position pseudo with z-index:0 would
+     actually paint *above* normal-flow content (positioned elements with
+     z-index:0 stack above static in-flow boxes per the CSS stacking
+     order), the opposite of "ambient background" -- not just visually
+     wrong, but a real bug were it left implicit. */
+  position: relative;
+  z-index: 0;
+}
+
+/* Slight blue/violet ambient gradients -- two soft, low-opacity radial
+   glows anchored to opposite corners. Absolutely positioned to exactly
+   cover .dashboardTheme (which is the full-viewport shell) and pinned
+   behind its content via a negative z-index within the stacking context
+   established above, so it reads as a property of the "room" the
+   dashboard sits in, not a decoration on any one section. Deliberately
+   faint: this should be felt more than seen, per the brief's "avoid
+   excessive gradients/glow." */
+.dashboardTheme::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 900px 500px at 8% -10%, rgba(91, 141, 239, 0.10), transparent 60%),
+    radial-gradient(ellipse 800px 500px at 105% 15%, rgba(167, 139, 250, 0.08), transparent 60%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
