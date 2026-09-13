@@ -1,0 +1,95 @@
+.card {
+  position: relative;
+  padding: 1.4rem 1.5rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--surface-border);
+  background:
+    linear-gradient(135deg, rgba(91, 141, 239, 0.08), rgba(167, 139, 250, 0.08)),
+    var(--ink-raised);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+/* A single, restrained accent line at the top -- distinguishes this
+   from the plain metric cards without resorting to a full glow/gradient
+   treatment across the whole card. */
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--viz-blue), var(--viz-purple));
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.sparkleIcon {
+  color: var(--gold);
+  display: inline-flex;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.briefText {
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--paper);
+  max-width: 62ch;
+}
+
+.error {
+  font-size: 0.85rem;
+  color: var(--sage);
+}
+
+.askLink {
+  display: inline-block;
+  margin-top: 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.askLink:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Skeleton loading ---------- */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skeletonLine {
+  height: 0.85rem;
+  border-radius: 4px;
+  background: var(--surface-active);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.skeletonShort {
+  width: 60%;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
