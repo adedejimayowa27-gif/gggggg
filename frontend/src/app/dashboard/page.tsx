@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
 import { apiFetch, ApiError } from "@/lib/api";
-import { fetchAnalyticsSummary } from "@/lib/analytics";
+import { fetchAnalyticsSummary, fetchAnalyticsTimeseries } from "@/lib/analytics";
 import type { AnalyticsSummary, Business, DateRangeValue } from "@/types";
 import MetricCard from "@/components/MetricCard";
 import DateRangePicker from "@/components/DateRangePicker";
@@ -34,6 +34,27 @@ function formatNumber(value: string | number): string {
   return numberFormatter.format(Number(value));
 }
 
+/** A same-length period immediately preceding the current one, so
+ * "vs previous period" compares like-for-like (e.g. a 30-day window
+ * against the 30 days before it) rather than an arbitrary lookback. */
+function previousPeriodRange(startDate: string, endDate: string): { start_date: string; end_date: string } {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  const durationMs = end.getTime() - start.getTime();
+  const prevEnd = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+  const prevStart = new Date(prevEnd.getTime() - durationMs);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { start_date: iso(prevStart), end_date: iso(prevEnd) };
+}
+
+/** Relative percentage change, or null when there's no honest baseline
+ * to compare against (previous period had literally zero) -- shown as
+ * no comparison at all rather than a misleading "+100%"/"-100%"/"∞". */
+function percentChange(current: number, previous: number): number | null {
+  if (previous === 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
 export default function OverviewPage() {
   const { token } = useAuth();
   const { businesses, primaryBusiness, isLoadingBusinesses, refreshBusinesses, selectBusiness } = useDashboard();
@@ -46,6 +67,12 @@ export default function OverviewPage() {
 
   const [dateRange, setDateRange] = useState<DateRangeValue>({ range: "30d" });
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [previousSummary, setPreviousSummary] = useState<AnalyticsSummary | null>(null);
+  const [sparklines, setSparklines] = useState<{ revenue: number[]; profit: number[]; margin: number[] }>({
+    revenue: [],
+    profit: [],
+    margin: [],
+  });
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
@@ -57,8 +84,33 @@ export default function OverviewPage() {
     setSummaryError(null);
 
     fetchAnalyticsSummary(primaryBusiness.id, dateRange, token)
-      .then((data) => {
-        if (!cancelled) setSummary(data);
+      .then(async (data) => {
+        if (cancelled) return;
+        setSummary(data);
+
+        // Comparison period and sparkline both derive from this same
+        // resolved summary (its actual start_date/end_date), so they
+        // always describe the exact range shown, not a hardcoded
+        // assumption about what the selected preset means in days.
+        const prevRange = previousPeriodRange(data.start_date, data.end_date);
+        const [previous, timeseries] = await Promise.all([
+          fetchAnalyticsSummary(primaryBusiness.id, { range: "custom", ...prevRange }, token).catch(
+            () => null
+          ),
+          fetchAnalyticsTimeseries(primaryBusiness.id, dateRange, "day", token).catch(() => null),
+        ]);
+        if (cancelled) return;
+
+        setPreviousSummary(previous);
+        if (timeseries) {
+          setSparklines({
+            revenue: timeseries.points.map((p) => Number(p.revenue)),
+            profit: timeseries.points.map((p) => Number(p.gross_profit)),
+            margin: timeseries.points.map((p) =>
+              Number(p.revenue) > 0 ? (Number(p.gross_profit) / Number(p.revenue)) * 100 : 0
+            ),
+          });
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -145,6 +197,19 @@ export default function OverviewPage() {
       ? "Couldn't load"
       : "No transactions yet";
 
+  const revenueChange =
+    summary && previousSummary ? percentChange(Number(summary.revenue), Number(previousSummary.revenue)) : null;
+  const profitChange =
+    summary && previousSummary
+      ? percentChange(Number(summary.gross_profit), Number(previousSummary.gross_profit))
+      : null;
+  const marginChange =
+    summary && previousSummary ? Number(summary.profit_margin) - Number(previousSummary.profit_margin) : null;
+  const transactionsChange =
+    summary && previousSummary
+      ? percentChange(summary.transaction_count, previousSummary.transaction_count)
+      : null;
+
   return (
     <div>
       <div className={styles.header}>
@@ -188,18 +253,25 @@ export default function OverviewPage() {
         </div>
       )}
 
-      <div className={styles.uploadSection}>
-        <div className={styles.uploadText}>
-          <h2>No transaction data yet</h2>
-          <p>
-            Upload your sales, expenses, or bank transactions to unlock real metrics,
-            forecasting, and AI insights.
-          </p>
+      {/* Fixed from before: this used to render unconditionally
+          regardless of whether the business actually had data yet,
+          showing "No transaction data" even on a business with months
+          of real transactions. Now gated behind !hasData, and rewritten
+          to the brief's polished, non-error-looking empty state. */}
+      {!isLoadingSummary && !hasData && (
+        <div className={styles.uploadSection}>
+          <div className={styles.uploadText}>
+            <h2>Unlock your business intelligence</h2>
+            <p>
+              Connect your sales or transaction data to start seeing revenue trends, profit
+              analysis, forecasts, and AI insights.
+            </p>
+          </div>
+          <Link href="/dashboard/transactions" className={styles.uploadButton}>
+            + Import transactions
+          </Link>
         </div>
-        <Link href="/dashboard/transactions" className={styles.uploadButton}>
-          Upload Transactions
-        </Link>
-      </div>
+      )}
 
       {token && <AlertsPanel businessId={primaryBusiness.id} token={token} compact />}
 
@@ -207,47 +279,62 @@ export default function OverviewPage() {
         <MetricCard
           label="Revenue"
           icon="revenue"
+          accent="gold"
           isEmpty={!hasData}
           emptyText={emptyText}
           value={summary ? formatCurrency(summary.revenue) : undefined}
+          changePercent={revenueChange}
+          changeLabel="vs previous period"
+          sparklineValues={sparklines.revenue}
+          detailsHref="/dashboard/analytics"
         />
         <MetricCard
           label="Gross Profit"
           icon="profit"
+          accent="leaf"
           isEmpty={!hasData}
           emptyText={emptyText}
           value={summary ? formatCurrency(summary.gross_profit) : undefined}
+          changePercent={profitChange}
+          changeLabel="vs previous period"
+          sparklineValues={sparklines.profit}
+          detailsHref="/dashboard/analytics"
         />
         <MetricCard
           label="Profit Margin"
           icon="margin"
+          accent="purple"
           isEmpty={!hasData}
           emptyText={emptyText}
           value={summary ? formatPercent(summary.profit_margin) : undefined}
+          changePercent={marginChange}
+          changeLabel="vs previous period"
+          sparklineValues={sparklines.margin}
+          detailsHref="/dashboard/analytics"
         />
         <MetricCard
           label="Transactions"
           icon="transactions"
+          accent="blue"
           isEmpty={!hasData}
           emptyText={isLoadingSummary ? "Loading…" : summaryError ? "Couldn't load" : "0 recorded"}
           value={summary ? formatNumber(summary.transaction_count) : undefined}
+          changePercent={transactionsChange}
+          changeLabel="vs previous period"
+          detailsHref="/dashboard/transactions"
         />
         <MetricCard
           label="Units Sold"
           icon="products"
+          accent="neutral"
           isEmpty={!hasData}
           emptyText={isLoadingSummary ? "Loading…" : summaryError ? "Couldn't load" : "0 sold"}
           value={summary ? formatNumber(summary.units_sold) : undefined}
+          detailsHref="/dashboard/products"
         />
       </div>
 
       {summaryError && <p className={styles.error}>{summaryError}</p>}
-
-      {businesses.length > 1 && (
-        <p style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: "1.5rem" }}>
-          Showing your first business. Switching between businesses is coming soon.
-        </p>
-      )}
     </div>
   );
 }
