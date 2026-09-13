@@ -1,13 +1,55 @@
+"use client";
+
+import { useRef, useState } from "react";
+import Link from "next/link";
+import { useClickOutside } from "@/hooks/useClickOutside";
+import Sparkline from "@/components/Sparkline";
 import styles from "./MetricCard.module.css";
 
 export type MetricIcon = "revenue" | "profit" | "margin" | "transactions" | "products";
+export type MetricAccent = "gold" | "leaf" | "purple" | "blue" | "neutral";
+
+const ACCENT_VAR: Record<MetricAccent, string> = {
+  gold: "var(--gold)",
+  leaf: "var(--leaf)",
+  purple: "var(--viz-purple)",
+  blue: "var(--viz-blue)",
+  neutral: "var(--sage)",
+};
+
+// Separate from ACCENT_VAR: a tinted icon-background needs both a text
+// color and a translucent version of that same color for the chip
+// behind it. Concatenating an alpha suffix onto a `var(--x)` string
+// (e.g. `${accentColor}1F`) is not valid CSS -- a var() reference can't
+// have a hex suffix appended to it like a literal hex code can -- so
+// each accent's tint is its own fixed, pre-mixed color here instead.
+const ACCENT_TINT_CLASS: Record<MetricAccent, string> = {
+  gold: "iconGold",
+  leaf: "iconLeaf",
+  purple: "iconPurple",
+  blue: "iconBlue",
+  neutral: "iconNeutral",
+};
 
 interface Props {
   label: string;
   icon: MetricIcon;
+  accent?: MetricAccent;
   isEmpty?: boolean;
   emptyText?: string;
   value?: string;
+  /** Percentage change vs. the comparison period, e.g. 18.4 for "+18.4%".
+   * Omit (or pass null) for a card that has nothing meaningful to
+   * compare yet -- never fabricate a number here. */
+  changePercent?: number | null;
+  changeLabel?: string;
+  /** Real period-over-period values for the sparkline, or omit entirely
+   * -- a card with no backing timeseries data (see MetricCard usage on
+   * the Overview page) simply doesn't render one, rather than drawing a
+   * fake trend line. */
+  sparklineValues?: number[] | null;
+  /** Where "View details" in the card's menu goes. */
+  detailsHref?: string;
 }
 
 function Icon({ type }: { type: MetricIcon }) {
@@ -73,20 +115,75 @@ function Icon({ type }: { type: MetricIcon }) {
   }
 }
 
-export default function MetricCard({ label, icon, isEmpty = true, emptyText, value }: Props) {
+export default function MetricCard({
+  label,
+  icon,
+  accent = "neutral",
+  isEmpty = true,
+  emptyText,
+  value,
+  changePercent,
+  changeLabel,
+  sparklineValues,
+  detailsHref,
+}: Props) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useClickOutside(menuRef, isMenuOpen, () => setIsMenuOpen(false));
+
+  const accentColor = ACCENT_VAR[accent];
+  const isPositive = typeof changePercent === "number" && changePercent >= 0;
+
   return (
     <div className={styles.card}>
-      <div className={styles.iconWrap}>
-        <Icon type={icon} />
+      <div className={styles.cardTop}>
+        <div className={`${styles.iconWrap} ${styles[ACCENT_TINT_CLASS[accent]]}`}>
+          <Icon type={icon} />
+        </div>
+
+        {detailsHref && (
+          <div className={styles.menuWrap} ref={menuRef}>
+            <button
+              className={styles.menuButton}
+              onClick={() => setIsMenuOpen((open) => !open)}
+              aria-label={`${label} options`}
+              aria-expanded={isMenuOpen}
+            >
+              <span className={styles.dots}>&#8226;&#8226;&#8226;</span>
+            </button>
+            {isMenuOpen && (
+              <div className={styles.menu}>
+                <Link href={detailsHref} className={styles.menuItem} onClick={() => setIsMenuOpen(false)}>
+                  View details
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
       <div className={styles.label}>{label}</div>
+
       {isEmpty ? (
         <>
           <div className={styles.emptyValue}>—</div>
           <div className={styles.emptyText}>{emptyText || "No data yet"}</div>
         </>
       ) : (
-        <div className={styles.value}>{value}</div>
+        <div className={styles.valueRow}>
+          <div>
+            <div className={styles.value}>{value}</div>
+            {typeof changePercent === "number" && (
+              <div className={`${styles.change} ${isPositive ? styles.changeUp : styles.changeDown}`}>
+                {isPositive ? "▲" : "▼"} {Math.abs(changePercent).toFixed(1)}%
+                {changeLabel && <span className={styles.changeLabel}> {changeLabel}</span>}
+              </div>
+            )}
+          </div>
+          {sparklineValues && sparklineValues.length > 1 && (
+            <Sparkline values={sparklineValues} color={accentColor} />
+          )}
+        </div>
       )}
     </div>
   );
