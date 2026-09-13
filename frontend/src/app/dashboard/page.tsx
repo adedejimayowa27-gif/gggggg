@@ -10,6 +10,7 @@ import type { AnalyticsSummary, Business, DateRangeValue } from "@/types";
 import MetricCard from "@/components/MetricCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import AlertsPanel from "@/components/AlertsPanel";
+import AIBusinessBrief from "@/components/AIBusinessBrief";
 import styles from "./overview.module.css";
 
 const currencyFormatter = new Intl.NumberFormat("en-NG", {
@@ -333,6 +334,10 @@ export default function OverviewPage() {
           detailsHref="/dashboard/products"
         />
       </div>
+
+      {token && (
+        <AIBusinessBrief businessId={primaryBusiness.id} token={token} hasData={hasData} />
+      )}
 
       {summaryError && <p className={styles.error}>{summaryError}</p>}
     </div>
