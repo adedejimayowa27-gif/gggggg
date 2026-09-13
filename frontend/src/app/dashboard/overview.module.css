@@ -49,8 +49,8 @@
   gap: 1rem;
   padding: 1.5rem;
   border-radius: 10px;
-  border: 1px dashed #2a3142;
-  background: #0f1420;
+  border: 1px dashed var(--surface-border);
+  background: var(--surface);
   margin-bottom: 2rem;
 }
 
@@ -70,8 +70,8 @@
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
   border: none;
-  background: var(--accent);
-  color: #fff;
+  background: var(--gold);
+  color: var(--ink);
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
@@ -89,7 +89,7 @@
   padding: 2rem;
   border-radius: 10px;
   border: 1px solid var(--surface-border);
-  background: #11151d;
+  background: var(--ink-raised);
 }
 
 .emptyBusinessWrap h2 {
@@ -123,8 +123,8 @@
   padding: 0.6rem;
   border-radius: 6px;
   border: none;
-  background: var(--accent);
-  color: #fff;
+  background: var(--gold);
+  color: var(--ink);
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
