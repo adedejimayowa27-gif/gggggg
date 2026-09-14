@@ -48,7 +48,9 @@
 
 .legendKey {
   display: flex;
+  align-items: center;
   gap: 1.25rem;
+  flex-wrap: wrap;
 }
 
 .legendItem {
@@ -57,6 +59,17 @@
   gap: 0.4rem;
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.transactionStat {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.transactionStat strong {
+  color: var(--paper);
+  font-weight: 700;
 }
 
 .swatchRevenue,
