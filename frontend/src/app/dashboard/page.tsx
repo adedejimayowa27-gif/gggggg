@@ -11,6 +11,7 @@ import MetricCard from "@/components/MetricCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import AlertsPanel from "@/components/AlertsPanel";
 import AIBusinessBrief from "@/components/AIBusinessBrief";
+import RevenueProfitChart from "@/components/RevenueProfitChart";
 import styles from "./overview.module.css";
 
 const currencyFormatter = new Intl.NumberFormat("en-NG", {
@@ -337,6 +338,18 @@ export default function OverviewPage() {
 
       {token && (
         <AIBusinessBrief businessId={primaryBusiness.id} token={token} hasData={hasData} />
+      )}
+
+      {token && hasData && (
+        <div className={styles.chartSection}>
+          <RevenueProfitChart
+            businessId={primaryBusiness.id}
+            dateRange={dateRange}
+            token={token}
+            title="Revenue Overview"
+            transactionCount={summary?.transaction_count}
+          />
+        </div>
       )}
 
       {summaryError && <p className={styles.error}>{summaryError}</p>}
