@@ -32,6 +32,16 @@ interface Props {
   businessId: string;
   dateRange: DateRangeValue;
   token: string;
+  /** Defaults preserve the exact heading the Analytics page already
+   * shows -- only the Overview page (Batch 6) passes something
+   * different, so nothing about the existing Analytics usage changes. */
+  title?: string;
+  /** The period's total transaction count, if the caller already has it
+   * (the Overview page does, from its own summary fetch) -- shown as a
+   * plain supplementary stat rather than plotted on the chart, since
+   * the timeseries endpoint this chart is built on doesn't return a
+   * per-period transaction count to actually chart truthfully. */
+  transactionCount?: number;
 }
 
 const GRANULARITIES: { label: string; value: Granularity }[] = [
@@ -73,7 +83,13 @@ function toChartRows(points: TimeseriesPoint[]): ChartRow[] {
   }));
 }
 
-export default function RevenueProfitChart({ businessId, dateRange, token }: Props) {
+export default function RevenueProfitChart({
+  businessId,
+  dateRange,
+  token,
+  title = "Revenue & Profit",
+  transactionCount,
+}: Props) {
   const [granularity, setGranularity] = useState<Granularity>("day");
   const [rows, setRows] = useState<ChartRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -108,7 +124,7 @@ export default function RevenueProfitChart({ businessId, dateRange, token }: Pro
   return (
     <div className={styles.card}>
       <div className={styles.header}>
-        <h2 className={styles.title}>Revenue &amp; Profit</h2>
+        <h2 className={styles.title}>{title}</h2>
         <div className={styles.granularityGroup} role="group" aria-label="Chart granularity">
           {GRANULARITIES.map((g) => (
             <button
@@ -132,6 +148,11 @@ export default function RevenueProfitChart({ businessId, dateRange, token }: Pro
         <span className={styles.legendItem}>
           <span className={styles.swatchProfit} /> Gross profit
         </span>
+        {typeof transactionCount === "number" && (
+          <span className={styles.transactionStat}>
+            <strong>{transactionCount.toLocaleString()}</strong> transactions this period
+          </span>
+        )}
       </div>
 
       <div className={styles.chartArea}>
