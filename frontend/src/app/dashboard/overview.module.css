@@ -84,6 +84,10 @@
   gap: 1rem;
 }
 
+.chartSection {
+  margin-top: 1.5rem;
+}
+
 .emptyBusinessWrap {
   max-width: 420px;
   padding: 2rem;
