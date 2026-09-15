@@ -102,6 +102,20 @@
   }
 }
 
+.bottomPanelsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  align-items: stretch;
+}
+
+@media (max-width: 860px) {
+  .bottomPanelsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .emptyBusinessWrap {
   max-width: 420px;
   padding: 2rem;
