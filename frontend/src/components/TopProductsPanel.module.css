@@ -1,0 +1,137 @@
+.panel {
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--surface-border);
+  background: var(--ink-raised);
+  height: 100%;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--paper);
+  margin-bottom: 1rem;
+}
+
+.muted {
+  font-size: 0.85rem;
+  color: var(--sage);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.table th {
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sage);
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.table td {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--surface-border);
+  color: var(--paper);
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.rank {
+  color: var(--sage);
+  font-weight: 600;
+  width: 1.5rem;
+}
+
+.productCell {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 500;
+}
+
+.productIcon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.icon_gold {
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.12);
+}
+
+.icon_leaf {
+  color: var(--leaf);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.icon_purple {
+  color: var(--viz-purple);
+  background: rgba(167, 139, 250, 0.14);
+}
+
+.icon_blue {
+  color: var(--viz-blue);
+  background: rgba(91, 141, 239, 0.14);
+}
+
+.shareCell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 90px;
+}
+
+.shareBar {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-active);
+  overflow: hidden;
+}
+
+.shareFill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.fill_gold {
+  background: var(--gold);
+}
+
+.fill_leaf {
+  background: var(--leaf);
+}
+
+.fill_purple {
+  background: var(--viz-purple);
+}
+
+.fill_blue {
+  background: var(--viz-blue);
+}
+
+.sharePercent {
+  flex-shrink: 0;
+  font-size: 0.76rem;
+  color: var(--sage);
+  width: 2rem;
+  text-align: right;
+}
