@@ -14,6 +14,8 @@ import AIBusinessBrief from "@/components/AIBusinessBrief";
 import RevenueProfitChart from "@/components/RevenueProfitChart";
 import AIAssistantPanel from "@/components/AIAssistantPanel";
 import QuickActionsPanel from "@/components/QuickActionsPanel";
+import TopProductsPanel from "@/components/TopProductsPanel";
+import RecentTransactionsPanel from "@/components/RecentTransactionsPanel";
 import styles from "./overview.module.css";
 
 const currencyFormatter = new Intl.NumberFormat("en-NG", {
@@ -358,6 +360,18 @@ export default function OverviewPage() {
         <div className={styles.sidePanelsGrid}>
           <AIAssistantPanel businessId={primaryBusiness.id} token={token} />
           <QuickActionsPanel />
+        </div>
+      )}
+
+      {token && hasData && (
+        <div className={styles.bottomPanelsGrid}>
+          <TopProductsPanel
+            businessId={primaryBusiness.id}
+            token={token}
+            dateRange={dateRange}
+            totalRevenue={summary ? Number(summary.revenue) : 0}
+          />
+          <RecentTransactionsPanel businessId={primaryBusiness.id} token={token} />
         </div>
       )}
 
