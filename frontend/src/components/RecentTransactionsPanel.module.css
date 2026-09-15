@@ -1,0 +1,75 @@
+.panel {
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--surface-border);
+  background: var(--ink-raised);
+  height: 100%;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--paper);
+  margin-bottom: 1rem;
+}
+
+.muted {
+  font-size: 0.85rem;
+  color: var(--sage);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.table th {
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sage);
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.table td {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--surface-border);
+  color: var(--paper);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.productName {
+  font-weight: 500;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--leaf);
+  background: rgba(52, 211, 153, 0.12);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+
+.statusBadge::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--leaf);
+}
