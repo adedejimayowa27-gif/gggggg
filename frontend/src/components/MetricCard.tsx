@@ -35,6 +35,15 @@ interface Props {
   label: string;
   icon: MetricIcon;
   accent?: MetricAccent;
+  /** True while data is being fetched -- renders a pulsing skeleton
+   * placeholder, distinct from isEmpty (which means the fetch finished
+   * and there's genuinely nothing to show). Conflating these into one
+   * flag was the original version of this component's mistake: a card
+   * that was still loading looked identical to one confirmed empty,
+   * which reads as "this business has no data" for a fraction of a
+   * second on every single page load, even for businesses with months
+   * of real numbers. */
+  isLoading?: boolean;
   isEmpty?: boolean;
   emptyText?: string;
   value?: string;
@@ -119,6 +128,7 @@ export default function MetricCard({
   label,
   icon,
   accent = "neutral",
+  isLoading = false,
   isEmpty = true,
   emptyText,
   value,
@@ -164,7 +174,12 @@ export default function MetricCard({
 
       <div className={styles.label}>{label}</div>
 
-      {isEmpty ? (
+      {isLoading ? (
+        <div className={styles.skeleton}>
+          <span className={styles.skeletonValue} />
+          <span className={styles.skeletonChange} />
+        </div>
+      ) : isEmpty ? (
         <>
           <div className={styles.emptyValue}>—</div>
           <div className={styles.emptyText}>{emptyText || "No data yet"}</div>
