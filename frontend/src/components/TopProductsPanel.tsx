@@ -62,6 +62,7 @@ export default function TopProductsPanel({ businessId, token, dateRange, totalRe
       )}
 
       {!isLoading && !error && items.length > 0 && (
+        <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -104,6 +105,7 @@ export default function TopProductsPanel({ businessId, token, dateRange, totalRe
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
