@@ -127,11 +127,61 @@
   color: var(--sage);
 }
 
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.2rem 0;
+}
+
+.skeletonValue {
+  display: block;
+  width: 70%;
+  height: 1.5rem;
+  border-radius: 6px;
+  background: var(--surface-active);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.skeletonChange {
+  display: block;
+  width: 40%;
+  height: 0.7rem;
+  border-radius: 4px;
+  background: var(--surface-active);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .valueRow {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+/* At the narrow end of .cardsGrid's minmax(200px, 1fr) columns, a fixed-
+   width sparkline next to a currency value like "₦21,524,400" doesn't
+   reliably fit -- stacking removes the sparkline (rather than shrinking
+   it further, which stops being a legible trend line below a certain
+   width) so the number itself never wraps or overflows. */
+@media (max-width: 480px) {
+  .valueRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .valueRow svg {
+    display: none;
+  }
 }
 
 .value {
