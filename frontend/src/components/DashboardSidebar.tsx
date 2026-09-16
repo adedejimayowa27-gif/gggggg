@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import Logo from "@/components/Logo";
 import NavIcon, { NavIconName } from "@/components/NavIcon";
 import { useDashboard } from "@/context/DashboardContext";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import styles from "./DashboardSidebar.module.css";
 
 interface NavItem {
@@ -73,17 +74,7 @@ export default function DashboardSidebar({ onNavigate, forceExpanded = false }: 
   const isCollapsed = forceExpanded ? false : storedCollapsed;
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isSwitcherOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (switcherRef.current && !switcherRef.current.contains(event.target as Node)) {
-        setIsSwitcherOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isSwitcherOpen]);
+  useClickOutside(switcherRef, isSwitcherOpen, () => setIsSwitcherOpen(false));
 
   // Collapse is a pure display preference (no functionality behind it
   // changes) -- persisted so it survives a reload, same as any other
