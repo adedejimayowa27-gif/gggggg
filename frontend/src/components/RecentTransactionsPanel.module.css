@@ -19,8 +19,13 @@
   color: var(--sage);
 }
 
+.tableWrap {
+  overflow-x: auto;
+}
+
 .table {
   width: 100%;
+  min-width: 420px;
   border-collapse: collapse;
   font-size: 0.85rem;
 }
