@@ -72,6 +72,7 @@ export default function RecentTransactionsPanel({ businessId, token }: Props) {
       )}
 
       {!isLoading && !error && items.length > 0 && (
+        <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -94,6 +95,7 @@ export default function RecentTransactionsPanel({ businessId, token }: Props) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
