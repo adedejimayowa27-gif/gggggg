@@ -286,6 +286,7 @@ export default function OverviewPage() {
           label="Revenue"
           icon="revenue"
           accent="gold"
+          isLoading={isLoadingSummary}
           isEmpty={!hasData}
           emptyText={emptyText}
           value={summary ? formatCurrency(summary.revenue) : undefined}
@@ -298,6 +299,7 @@ export default function OverviewPage() {
           label="Gross Profit"
           icon="profit"
           accent="leaf"
+          isLoading={isLoadingSummary}
           isEmpty={!hasData}
           emptyText={emptyText}
           value={summary ? formatCurrency(summary.gross_profit) : undefined}
@@ -310,6 +312,7 @@ export default function OverviewPage() {
           label="Profit Margin"
           icon="margin"
           accent="purple"
+          isLoading={isLoadingSummary}
           isEmpty={!hasData}
           emptyText={emptyText}
           value={summary ? formatPercent(summary.profit_margin) : undefined}
@@ -322,6 +325,7 @@ export default function OverviewPage() {
           label="Transactions"
           icon="transactions"
           accent="blue"
+          isLoading={isLoadingSummary}
           isEmpty={!hasData}
           emptyText={isLoadingSummary ? "Loading…" : summaryError ? "Couldn't load" : "0 recorded"}
           value={summary ? formatNumber(summary.transaction_count) : undefined}
@@ -333,6 +337,7 @@ export default function OverviewPage() {
           label="Units Sold"
           icon="products"
           accent="neutral"
+          isLoading={isLoadingSummary}
           isEmpty={!hasData}
           emptyText={isLoadingSummary ? "Loading…" : summaryError ? "Couldn't load" : "0 sold"}
           value={summary ? formatNumber(summary.units_sold) : undefined}
