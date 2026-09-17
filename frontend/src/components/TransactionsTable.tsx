@@ -13,6 +13,56 @@ interface Props {
 
 const PAGE_SIZE = 25;
 
+const currencyFormatter = new Intl.NumberFormat("en-NG", {
+  style: "currency",
+  currency: "NGN",
+  minimumFractionDigits: 2,
+});
+
+const dateFormatter = new Intl.DateTimeFormat("en-NG", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  // Pinned to UTC deliberately, matching how the date is constructed
+  // below -- without this, the formatter converts the UTC instant back
+  // to the viewer's *local* timezone before extracting the calendar
+  // date, which for anyone west of UTC can still shift the displayed
+  // date back a day even though the Date object itself was built
+  // correctly. Both halves (construction AND formatting) have to agree
+  // on UTC, or the bug just moves from one step to the other.
+  timeZone: "UTC",
+});
+
+function formatCurrency(value: string): string {
+  return currencyFormatter.format(Number(value));
+}
+
+function formatDate(value: string): string {
+  // Transaction.date arrives as a plain "YYYY-MM-DD" -- parsed as UTC
+  // explicitly so it never shifts a day depending on the viewer's local
+  // timezone offset (a bare `new Date("2026-01-15")` is parsed as UTC
+  // midnight by spec, but formatting it with a local-timezone formatter
+  // can then display as the 14th for anyone west of UTC).
+  const [year, month, day] = value.split("-").map(Number);
+  return dateFormatter.format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function SkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <tr key={i}>
+          {Array.from({ length: 8 }).map((_, j) => (
+            <td key={j}>
+              <span className={styles.skeletonCell} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
 export default function TransactionsTable({ businessId, refreshSignal }: Props) {
   const { token } = useAuth();
   const [data, setData] = useState<PaginatedTransactions | null>(null);
@@ -37,15 +87,16 @@ export default function TransactionsTable({ businessId, refreshSignal }: Props) 
     setPage(1);
   }, [refreshSignal]);
 
-  if (isLoading && !data) {
-    return <p style={{ color: "var(--muted)" }}>Loading transactions…</p>;
+  if (!isLoading && (!data || data.total === 0)) {
+    return (
+      <div className={styles.empty}>
+        <p className={styles.emptyTitle}>No transactions yet</p>
+        <p className={styles.emptyBody}>Upload a file above to see your sales history here.</p>
+      </div>
+    );
   }
 
-  if (!data || data.total === 0) {
-    return <div className={styles.empty}>No transactions yet. Upload a file above to get started.</div>;
-  }
-
-  const totalPages = Math.max(1, Math.ceil(data.total / data.page_size));
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1;
 
   return (
     <div className={styles.wrap}>
@@ -64,44 +115,50 @@ export default function TransactionsTable({ businessId, refreshSignal }: Props) 
             </tr>
           </thead>
           <tbody>
-            {data.items.map((t) => (
-              <tr key={t.id}>
-                <td>{t.date}</td>
-                <td>{t.product}</td>
-                <td>{t.quantity}</td>
-                <td>{t.selling_price}</td>
-                <td>{t.cost_price ?? "—"}</td>
-                <td>{t.category ?? "—"}</td>
-                <td>{t.customer ?? "—"}</td>
-                <td>{t.payment_method ?? "—"}</td>
-              </tr>
-            ))}
+            {isLoading || !data ? (
+              <SkeletonRows />
+            ) : (
+              data.items.map((t) => (
+                <tr key={t.id}>
+                  <td>{formatDate(t.date)}</td>
+                  <td className={styles.productCell}>{t.product}</td>
+                  <td>{t.quantity}</td>
+                  <td>{formatCurrency(t.selling_price)}</td>
+                  <td>{t.cost_price ? formatCurrency(t.cost_price) : "—"}</td>
+                  <td>{t.category ?? "—"}</td>
+                  <td>{t.customer ?? "—"}</td>
+                  <td>{t.payment_method ?? "—"}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      <div className={styles.pagination}>
-        <span>
-          {data.total} total transaction{data.total === 1 ? "" : "s"} · Page {data.page} of{" "}
-          {totalPages}
-        </span>
-        <div className={styles.pageButtons}>
-          <button
-            className={styles.pageButton}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            Previous
-          </button>
-          <button
-            className={styles.pageButton}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
-            Next
-          </button>
+      {data && (
+        <div className={styles.pagination}>
+          <span>
+            {data.total} total transaction{data.total === 1 ? "" : "s"} · Page {data.page} of{" "}
+            {totalPages}
+          </span>
+          <div className={styles.pageButtons}>
+            <button
+              className={styles.pageButton}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || isLoading}
+            >
+              Previous
+            </button>
+            <button
+              className={styles.pageButton}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || isLoading}
+            >
+              Next
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
