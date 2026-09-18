@@ -2,22 +2,91 @@
   max-width: 760px;
 }
 
+/* ---------- Step indicator ---------- */
+
+.steps {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.75rem;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+}
+
+.stepDot {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--surface-border);
+  background: var(--surface);
+  color: var(--sage);
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stepDotActive {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.stepDotDone {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.stepLabel,
+.stepLabelActive {
+  margin-left: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--sage);
+  white-space: nowrap;
+}
+
+.stepLabelActive {
+  color: var(--paper);
+  font-weight: 600;
+}
+
+.stepLine {
+  width: 2.5rem;
+  height: 1px;
+  background: var(--surface-border);
+  margin: 0 0.9rem;
+}
+
+/* ---------- Dropzone ---------- */
+
 .dropzone {
-  border: 1px dashed #2a3142;
-  border-radius: 10px;
+  border: 1px dashed var(--surface-border);
+  border-radius: var(--radius-md);
   padding: 2.5rem 1.5rem;
   text-align: center;
-  background: #0f1420;
+  background: var(--surface);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dropzoneActive {
+  border-color: var(--gold);
+  background: var(--surface-active);
 }
 
 .dropzone h2 {
+  font-family: var(--font-display);
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--paper);
   margin-bottom: 0.5rem;
 }
 
 .dropzone p {
-  color: var(--muted);
+  color: var(--sage);
   font-size: 0.875rem;
   margin-bottom: 1.25rem;
 }
@@ -29,31 +98,41 @@
 .chooseButton {
   display: inline-block;
   padding: 0.65rem 1.25rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--surface-border);
   background: transparent;
-  color: var(--foreground);
+  color: var(--paper);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.chooseButton:hover {
+  border-color: var(--gold);
 }
 
 .fileName {
   margin-top: 1rem;
   font-size: 0.85rem;
-  color: var(--muted);
+  color: var(--sage);
 }
 
 .uploadButton {
   margin-top: 1.25rem;
   padding: 0.7rem 1.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: none;
-  background: var(--accent);
-  color: #fff;
+  background: var(--gold);
+  color: var(--ink);
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.uploadButton:hover:not(:disabled) {
+  background: var(--gold-deep);
 }
 
 .uploadButton:disabled {
@@ -72,15 +151,17 @@
 }
 
 .sectionTitle {
+  font-family: var(--font-display);
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--paper);
   margin-bottom: 0.75rem;
 }
 
 .tableWrap {
   overflow-x: auto;
   border: 1px solid var(--surface-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .table {
@@ -93,16 +174,20 @@
 .table th {
   text-align: left;
   padding: 0.5rem 0.75rem;
-  background: #11151d;
-  color: var(--muted);
+  background: var(--surface);
+  color: var(--sage);
   font-weight: 600;
   border-bottom: 1px solid var(--surface-border);
 }
 
 .table td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #171b25;
-  color: var(--foreground);
+  border-bottom: 1px solid var(--surface-border);
+  color: var(--paper);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
 }
 
 .mappingGrid {
@@ -120,34 +205,44 @@
 .mappingLabel {
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--foreground);
+  color: var(--paper);
 }
 
 .mappingOptional {
-  color: var(--muted);
+  color: var(--sage);
   font-weight: 400;
   font-size: 0.75rem;
 }
 
 .select {
   padding: 0.5rem 0.6rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--surface-border);
   background: var(--surface);
-  color: var(--foreground);
+  color: var(--paper);
   font-size: 0.9rem;
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--gold);
 }
 
 .confirmButton {
   margin-top: 1.5rem;
   padding: 0.7rem 1.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: none;
-  background: var(--accent);
-  color: #fff;
+  background: var(--gold);
+  color: var(--ink);
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.confirmButton:hover:not(:disabled) {
+  background: var(--gold-deep);
 }
 
 .confirmButton:disabled {
@@ -159,12 +254,16 @@
   margin-top: 1.5rem;
   margin-left: 0.75rem;
   padding: 0.7rem 1.25rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--surface-border);
   background: transparent;
-  color: var(--foreground);
+  color: var(--paper);
   font-size: 0.9rem;
   cursor: pointer;
+}
+
+.cancelButton:hover:not(:disabled) {
+  border-color: var(--gold);
 }
 
 .resultSummary {
@@ -176,25 +275,27 @@
 
 .resultStat {
   padding: 1rem 1.25rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--surface-border);
-  background: #11151d;
+  background: var(--surface);
   min-width: 140px;
 }
 
 .resultStatValue {
+  font-family: var(--font-display);
   font-size: 1.4rem;
   font-weight: 700;
+  color: var(--paper);
 }
 
 .resultStatLabel {
   font-size: 0.8rem;
-  color: var(--muted);
+  color: var(--sage);
   margin-top: 0.15rem;
 }
 
 .successValue {
-  color: #4ade80;
+  color: var(--leaf);
 }
 
 .failValue {
@@ -205,12 +306,12 @@
   max-height: 260px;
   overflow-y: auto;
   border: 1px solid var(--surface-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .errorRow {
   padding: 0.6rem 0.9rem;
-  border-bottom: 1px solid #171b25;
+  border-bottom: 1px solid var(--surface-border);
   font-size: 0.8rem;
 }
 
@@ -220,16 +321,26 @@
 
 .errorRowNumber {
   font-weight: 600;
-  color: var(--foreground);
+  color: var(--paper);
 }
 
 .errorMessages {
-  color: #ff9b9b;
+  color: var(--clay);
   margin-top: 0.15rem;
 }
 
 @media (max-width: 640px) {
   .mappingGrid {
     grid-template-columns: 1fr;
+  }
+
+  .stepLine {
+    width: 1.25rem;
+    margin: 0 0.5rem;
+  }
+
+  .stepLabel,
+  .stepLabelActive {
+    display: none;
   }
 }
