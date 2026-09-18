@@ -43,6 +43,7 @@ interface Props {
 export default function TransactionImportWizard({ businessId, onImportComplete }: Props) {
   const { token } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   // Guards against setState after unmount (e.g. the user navigates away
   // mid-poll) -- the poll loop checks this before each scheduled step.
   const unmountedRef = useRef(false);
@@ -71,6 +72,18 @@ export default function TransactionImportWizard({ businessId, onImportComplete }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (file) setSelectedFile(file);
+  };
+
+  // Purely additive: the existing click-to-choose <input type="file">
+  // still works exactly as before -- this just gives the same
+  // setSelectedFile call a second, faster way to be triggered. No
+  // upload/validation logic changes; a dropped file goes through the
+  // identical handleUpload path as a chosen one.
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
     if (file) setSelectedFile(file);
   };
 
@@ -149,12 +162,44 @@ export default function TransactionImportWizard({ businessId, onImportComplete }
     mapping &&
     STANDARD_FIELDS.filter((f) => !OPTIONAL_FIELDS.includes(f)).every((f) => mapping[f]);
 
+  const currentStep =
+    stage === "idle" || stage === "uploading" ? 1 : stage === "mapping" || stage === "confirming" ? 2 : 3;
+
   return (
     <div className={styles.wrap}>
+      <div className={styles.steps}>
+        {["Upload", "Map columns", "Done"].map((label, i) => {
+          const step = i + 1;
+          return (
+            <div key={label} className={styles.step}>
+              <span
+                className={`${styles.stepDot} ${
+                  step < currentStep ? styles.stepDotDone : step === currentStep ? styles.stepDotActive : ""
+                }`}
+              >
+                {step < currentStep ? "✓" : step}
+              </span>
+              <span className={step === currentStep ? styles.stepLabelActive : styles.stepLabel}>
+                {label}
+              </span>
+              {step < 3 && <span className={styles.stepLine} />}
+            </div>
+          );
+        })}
+      </div>
+
       {stage === "idle" && (
-        <div className={styles.dropzone}>
+        <div
+          className={`${styles.dropzone} ${isDragOver ? styles.dropzoneActive : ""}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={handleDrop}
+        >
           <h2>Upload a transactions file</h2>
-          <p>Accepts .xlsx or .csv files, up to 5MB and 5,000 rows.</p>
+          <p>Drag and drop, or choose a file -- accepts .xlsx or .csv, up to 5MB and 5,000 rows.</p>
           <input
             ref={fileInputRef}
             type="file"
