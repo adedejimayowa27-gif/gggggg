@@ -8,7 +8,14 @@
  * translated to query params in one place.
  */
 import { apiFetch } from "@/lib/api";
-import type { AnalyticsBreakdown, AnalyticsSummary, AnalyticsTimeseries, DateRangeValue, ProductAnalytics } from "@/types";
+import type {
+  AnalyticsBreakdown,
+  AnalyticsSummary,
+  AnalyticsTimeseries,
+  CustomerLoyalty,
+  DateRangeValue,
+  ProductAnalytics,
+} from "@/types";
 
 export function dateRangeQueryString(value: DateRangeValue): string {
   const params = new URLSearchParams();
@@ -71,6 +78,17 @@ export function fetchAnalyticsBreakdown(
     `/businesses/${businessId}/analytics/breakdown?${query}&group_by=${groupBy}${limitParam}`,
     { authToken: token }
   );
+}
+
+export function fetchCustomerLoyalty(
+  businessId: string,
+  range: DateRangeValue,
+  token: string
+): Promise<CustomerLoyalty> {
+  const query = dateRangeQueryString(range);
+  return apiFetch<CustomerLoyalty>(`/businesses/${businessId}/analytics/customer-loyalty?${query}`, {
+    authToken: token,
+  });
 }
 
 /** A same-length period immediately preceding the current one, so
