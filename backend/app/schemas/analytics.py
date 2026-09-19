@@ -78,3 +78,31 @@ class AnalyticsBreakdown(BaseModel):
     group_by: str
     items: list[BreakdownItem]
     has_data: bool
+
+
+class CustomerLoyaltySegment(BaseModel):
+    customer_count: int
+    revenue: Decimal
+    gross_profit: Decimal
+    transaction_count: int
+
+
+class CustomerLoyalty(BaseModel):
+    """
+    New vs. returning customers within the requested period.
+
+    "Returning" means the customer's first-ever transaction with this
+    business predates the period's start_date (they already existed as
+    a customer coming in). "New" means their first-ever transaction
+    falls inside the period. Same `has_data` convention as
+    AnalyticsBreakdown: false when no transaction in range has a
+    customer recorded at all, so a consumer can distinguish "this
+    business doesn't track customer identity" from "every sale this
+    period happened to be a new customer."
+    """
+
+    start_date: date
+    end_date: date
+    has_data: bool
+    new: CustomerLoyaltySegment
+    returning: CustomerLoyaltySegment
