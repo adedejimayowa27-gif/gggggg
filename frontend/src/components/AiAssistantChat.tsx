@@ -1,13 +1,17 @@
 "use client";
 
 /**
- * Chat UI for the AI assistant (Batch 5.3's
- * POST /businesses/{business_id}/assistant/messages).
+ * Chat UI for the AI assistant (POST /businesses/{business_id}/assistant/messages).
  *
  * On mount, loads the business's most recent conversation (if one
  * exists) and its messages, so refreshing the page doesn't lose
- * context -- the conversation itself is Batch 5.2 state, this
- * component just reads it back.
+ * context.
+ *
+ * Visual pass: brought in line with the rest of the dashboard redesign
+ * -- tokens instead of hardcoded hex, a tinted avatar chip per role
+ * (mirrors the icon-chip language everywhere else in the app), and a
+ * real retry action on a failed send instead of just a "Failed to
+ * send" label with no way to act on it.
  */
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -46,6 +50,22 @@ function toDisplayMessage(message: ChatMessage): DisplayMessage {
 function formatTime(iso?: string): string {
   if (!iso) return "";
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function AssistantAvatar() {
+  return (
+    <div className={`${styles.avatar} ${styles.avatarAssistant}`}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
+      </svg>
+    </div>
+  );
 }
 
 export default function AiAssistantChat({ businessId }: Props) {
@@ -118,12 +138,15 @@ export default function AiAssistantChat({ businessId }: Props) {
   }, [messages, isSending]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, retryOfId?: string) => {
       const trimmed = text.trim();
       if (!trimmed || isSending || !token) return;
 
-      const tempId = `temp-${Date.now()}`;
-      setMessages((prev) => [...prev, { id: tempId, role: "user", content: trimmed, pending: true }]);
+      const tempId = retryOfId ?? `temp-${Date.now()}`;
+      setMessages((prev) => {
+        const withoutRetried = retryOfId ? prev.filter((m) => m.id !== retryOfId) : prev;
+        return [...withoutRetried, { id: tempId, role: "user", content: trimmed, pending: true }];
+      });
       setInputValue("");
       setIsSending(true);
       setSendError(null);
@@ -170,107 +193,122 @@ export default function AiAssistantChat({ businessId }: Props) {
     }
   };
 
+  const handleRetry = (message: DisplayMessage) => {
+    sendMessage(message.content, message.id);
+  };
+
   const hasMessages = messages.length > 0;
 
   return (
-    <div>
-      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "1.25rem" }}>
-        AI Assistant
-      </h1>
-
-      <div className={styles.wrap}>
-        <div className={styles.messages}>
-          {isLoadingHistory ? (
-            <div className={styles.centerFill}>
-              <p style={{ color: "var(--muted)" }}>Loading conversation…</p>
+    <div className={styles.wrap}>
+      <div className={styles.messages}>
+        {isLoadingHistory ? (
+          <div className={styles.centerFill}>
+            <p className={styles.mutedText}>Loading conversation…</p>
+          </div>
+        ) : loadError ? (
+          <div className={styles.centerFill}>
+            <p className={styles.errorText}>{loadError}</p>
+          </div>
+        ) : !hasMessages ? (
+          <div className={styles.centerFill}>
+            <div className={styles.emptyIcon}>
+              <AssistantAvatar />
             </div>
-          ) : loadError ? (
-            <div className={styles.centerFill}>
-              <p style={{ color: "var(--clay)" }}>{loadError}</p>
-            </div>
-          ) : !hasMessages ? (
-            <div className={styles.centerFill}>
-              <p className={styles.emptyTitle}>Ask about your business numbers</p>
-              <p className={styles.emptyText}>
-                Revenue, profit, top products, comparisons across periods -- anything grounded
-                in your actual sales data.
-              </p>
-              <div className={styles.suggestions}>
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={styles.suggestionChip}
-                    onClick={() => sendMessage(s)}
-                    disabled={isSending}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <>
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`${styles.bubbleRow} ${
-                    m.role === "user" ? styles.bubbleRowUser : styles.bubbleRowAssistant
-                  }`}
+            <p className={styles.emptyTitle}>Ask about your business numbers</p>
+            <p className={styles.emptyText}>
+              Revenue, profit, top products, comparisons across periods -- anything grounded
+              in your actual sales data.
+            </p>
+            <div className={styles.suggestions}>
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={styles.suggestionChip}
+                  onClick={() => sendMessage(s)}
+                  disabled={isSending}
                 >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            {messages.map((m) => (
+              <div
+                key={m.id}
+                className={`${styles.bubbleRow} ${
+                  m.role === "user" ? styles.bubbleRowUser : styles.bubbleRowAssistant
+                }`}
+              >
+                {m.role === "assistant" && <AssistantAvatar />}
+                <div className={styles.bubbleColumn}>
                   <div
                     className={`${styles.bubble} ${
                       m.role === "user" ? styles.bubbleUser : styles.bubbleAssistant
-                    } ${m.pending ? styles.bubblePending : ""} ${
-                      m.failed ? styles.bubbleFailed : ""
-                    }`}
+                    } ${m.pending ? styles.bubblePending : ""} ${m.failed ? styles.bubbleFailed : ""}`}
                   >
                     <div className={styles.bubbleText}>{m.content}</div>
                     {m.created_at && !m.pending && (
                       <div className={styles.bubbleTime}>{formatTime(m.created_at)}</div>
                     )}
-                    {m.failed && <div className={styles.bubbleFailedText}>Failed to send</div>}
                   </div>
-                </div>
-              ))}
-
-              {isSending && (
-                <div className={`${styles.bubbleRow} ${styles.bubbleRowAssistant}`}>
-                  <div className={`${styles.bubble} ${styles.bubbleAssistant}`}>
-                    <div className={styles.typingDots}>
-                      <span />
-                      <span />
-                      <span />
+                  {m.failed && (
+                    <div className={styles.failedRow}>
+                      <span className={styles.bubbleFailedText}>Failed to send</span>
+                      <button
+                        type="button"
+                        className={styles.retryButton}
+                        onClick={() => handleRetry(m)}
+                        disabled={isSending}
+                      >
+                        Retry
+                      </button>
                     </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {isSending && (
+              <div className={`${styles.bubbleRow} ${styles.bubbleRowAssistant}`}>
+                <AssistantAvatar />
+                <div className={`${styles.bubble} ${styles.bubbleAssistant}`}>
+                  <div className={styles.typingDots}>
+                    <span />
+                    <span />
+                    <span />
                   </div>
                 </div>
-              )}
-            </>
-          )}
-          <div ref={bottomRef} />
-        </div>
-
-        <form className={styles.inputRow} onSubmit={handleSubmit}>
-          <textarea
-            ref={textareaRef}
-            className={styles.textarea}
-            placeholder="Ask about revenue, profit, top products…"
-            rows={1}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isLoadingHistory}
-          />
-          <button
-            type="submit"
-            className={styles.sendButton}
-            disabled={isLoadingHistory || isSending || !inputValue.trim()}
-          >
-            Send
-          </button>
-        </form>
-        {sendError && <div className={styles.sendError}>{sendError}</div>}
+              </div>
+            )}
+          </>
+        )}
+        <div ref={bottomRef} />
       </div>
+
+      <form className={styles.inputRow} onSubmit={handleSubmit}>
+        <textarea
+          ref={textareaRef}
+          className={styles.textarea}
+          placeholder="Ask about revenue, profit, top products…"
+          rows={1}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={isLoadingHistory}
+        />
+        <button
+          type="submit"
+          className={styles.sendButton}
+          disabled={isLoadingHistory || isSending || !inputValue.trim()}
+        >
+          Send
+        </button>
+      </form>
+      {sendError && <div className={styles.sendError}>{sendError}</div>}
     </div>
   );
 }
