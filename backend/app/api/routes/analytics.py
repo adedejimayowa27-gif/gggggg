@@ -23,6 +23,8 @@ from app.schemas.analytics import (
     AnalyticsSummary,
     AnalyticsTimeseries,
     BreakdownItem,
+    CustomerLoyalty,
+    CustomerLoyaltySegment,
     ProductAnalytics,
     ProductAnalyticsItem,
     TimeseriesPoint,
@@ -269,4 +271,103 @@ def get_analytics_breakdown(
         group_by=group_by.value,
         items=items,
         has_data=has_data,
+    )
+
+
+@router.get("/customer-loyalty", response_model=CustomerLoyalty)
+def get_customer_loyalty(
+    range: DateRangePreset = Query(default=DateRangePreset.LAST_30D),
+    start_date: date_type | None = Query(default=None),
+    end_date: date_type | None = Query(default=None),
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """
+    New vs. returning customers in the period -- see CustomerLoyalty's
+    docstring for the exact "new" vs "returning" definition.
+
+    Two queries rather than one: first, each customer's aggregate
+    within the period (this is exactly get_breakdown's per-customer
+    query, unlimited); second, each of those same customers' truest
+    first-ever transaction date with this business (not bounded to the
+    period, since "have they bought before" requires looking before
+    start_date). The classification itself -- and the revenue/profit
+    summation per bucket -- happens in Python rather than SQL, since
+    "GROUP BY whether a joined subquery column is before or after a
+    parameter" is exactly the kind of conditional aggregation that gets
+    fragile and dialect-specific in SQL for very little benefit here:
+    real-world customer counts for this product's businesses are small
+    enough that summing ~dozens-to-low-thousands of rows in Python is
+    not a performance concern, and the logic is far easier to verify
+    correct written this way.
+    """
+    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
+
+    period_rows = (
+        db.query(
+            Transaction.customer.label("customer"),
+            revenue_expr().label("revenue"),
+            cost_expr().label("total_cost"),
+            transaction_count_expr().label("transaction_count"),
+        )
+        .filter(*period_filters(business, resolved_start, resolved_end))
+        .filter(Transaction.customer.isnot(None))
+        .group_by(Transaction.customer)
+        .all()
+    )
+
+    has_data = len(period_rows) > 0
+
+    def empty_segment() -> CustomerLoyaltySegment:
+        return CustomerLoyaltySegment(
+            customer_count=0, revenue=Decimal(0), gross_profit=Decimal(0), transaction_count=0
+        )
+
+    if not has_data:
+        return CustomerLoyalty(
+            start_date=resolved_start,
+            end_date=resolved_end,
+            has_data=False,
+            new=empty_segment(),
+            returning=empty_segment(),
+        )
+
+    customers_in_period = [row.customer for row in period_rows]
+
+    # Each of those customers' true first-ever purchase date, unbounded
+    # by the period -- a customer who bought once last year and again
+    # this period is "returning" even though this period alone would
+    # make them look brand new.
+    first_purchase_dates = dict(
+        db.query(Transaction.customer, func.min(Transaction.date))
+        .filter(Transaction.business_id == business.id, Transaction.customer.in_(customers_in_period))
+        .group_by(Transaction.customer)
+        .all()
+    )
+
+    new_totals = {"revenue": Decimal(0), "total_cost": Decimal(0), "transaction_count": 0, "customer_count": 0}
+    returning_totals = {"revenue": Decimal(0), "total_cost": Decimal(0), "transaction_count": 0, "customer_count": 0}
+
+    for row in period_rows:
+        first_date = first_purchase_dates.get(row.customer)
+        bucket = new_totals if (first_date is None or first_date >= resolved_start) else returning_totals
+        bucket["revenue"] += Decimal(row.revenue)
+        bucket["total_cost"] += Decimal(row.total_cost)
+        bucket["transaction_count"] += row.transaction_count
+        bucket["customer_count"] += 1
+
+    def finalize(totals: dict) -> CustomerLoyaltySegment:
+        return CustomerLoyaltySegment(
+            customer_count=totals["customer_count"],
+            revenue=totals["revenue"],
+            gross_profit=totals["revenue"] - totals["total_cost"],
+            transaction_count=totals["transaction_count"],
+        )
+
+    return CustomerLoyalty(
+        start_date=resolved_start,
+        end_date=resolved_end,
+        has_data=True,
+        new=finalize(new_totals),
+        returning=finalize(returning_totals),
     )
