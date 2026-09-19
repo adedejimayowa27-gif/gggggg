@@ -167,6 +167,21 @@ export interface AnalyticsBreakdown {
   has_data: boolean;
 }
 
+export interface CustomerLoyaltySegment {
+  customer_count: number;
+  revenue: string;
+  gross_profit: string;
+  transaction_count: number;
+}
+
+export interface CustomerLoyalty {
+  start_date: string;
+  end_date: string;
+  has_data: boolean;
+  new: CustomerLoyaltySegment;
+  returning: CustomerLoyaltySegment;
+}
+
 // --- AI assistant / chat ----------------------------------------------
 //
 // Mirrors backend/app/schemas/chat.py and backend/app/schemas/assistant.py.
