@@ -1,35 +1,76 @@
 .card {
   display: flex;
   flex-direction: column;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--surface-border);
-  background: #11151d;
+  background: var(--ink-raised);
   padding: 1.25rem;
+  min-width: 0;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--surface-active);
+  transform: translateY(-2px);
+}
+
+/* ---------- Header ---------- */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+}
+
+.iconWrap {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconGold {
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.12);
+}
+
+.iconLeaf {
+  color: var(--leaf);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.iconClay {
+  color: var(--clay);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.iconBlue {
+  color: var(--viz-blue);
+  background: rgba(91, 141, 239, 0.14);
+}
+
+.headerText {
   min-width: 0;
 }
 
-.header {
-  margin-bottom: 0.9rem;
-}
-
 .title {
+  font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 700;
-  color: var(--foreground);
+  color: var(--paper);
 }
 
 .description {
   font-size: 0.8rem;
-  color: var(--muted);
-  margin-top: 0.2rem;
+  color: var(--sage);
+  margin-top: 0.15rem;
 }
 
-.placeholder {
-  padding: 1.5rem 0;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
+/* ---------- List ---------- */
 
 .list {
   display: flex;
@@ -38,11 +79,8 @@
 }
 
 .row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid #171b25;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .row:last-child {
@@ -54,18 +92,43 @@
   padding-top: 0;
 }
 
-.rank {
+.rowTop {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.badge {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--surface-active);
-  color: var(--accent);
-  font-size: 0.75rem;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.badgeGold {
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.12);
+}
+
+.badgeLeaf {
+  color: var(--leaf);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.badgeClay {
+  color: var(--clay);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.badgeBlue {
+  color: var(--viz-blue);
+  background: rgba(91, 141, 239, 0.14);
 }
 
 .rowMain {
@@ -78,7 +141,7 @@
 .productName {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--foreground);
+  color: var(--paper);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -86,7 +149,7 @@
 
 .rowSub {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--sage);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -103,7 +166,7 @@
 .metricValue {
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--foreground);
+  color: var(--paper);
 }
 
 .metricNegative {
@@ -112,5 +175,102 @@
 
 .metricLabel {
   font-size: 0.7rem;
-  color: var(--muted);
+  color: var(--sage);
+}
+
+/* ---------- Magnitude bar ---------- */
+/* Mirrors TopProductsPanel's share bar -- badge (24px) + gap (0.75rem)
+   = 2.25rem, so the bar starts flush under the product name rather
+   than under the badge. */
+
+.barTrack {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-active);
+  overflow: hidden;
+  margin-left: 2.25rem;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.fillGold {
+  background: var(--gold);
+}
+
+.fillLeaf {
+  background: var(--leaf);
+}
+
+.fillClay {
+  background: var(--clay);
+}
+
+.fillBlue {
+  background: var(--viz-blue);
+}
+
+/* ---------- Skeleton loading ---------- */
+
+.skeletonList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.skeletonBadge {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-active);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.skeletonLine {
+  flex: 1;
+  height: 0.8rem;
+  border-radius: 4px;
+  background: var(--surface-active);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Empty / error state ---------- */
+
+.stateBox {
+  padding: 1.75rem 1rem;
+  text-align: center;
+  border: 1px dashed var(--surface-border);
+  border-radius: var(--radius-md);
+}
+
+.stateTitle {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--paper);
+  margin-bottom: 0.3rem;
+}
+
+.stateBody {
+  font-size: 0.8rem;
+  color: var(--sage);
 }
