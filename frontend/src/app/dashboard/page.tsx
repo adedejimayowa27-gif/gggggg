@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
 import { apiFetch, ApiError } from "@/lib/api";
-import { fetchAnalyticsSummary, fetchAnalyticsTimeseries } from "@/lib/analytics";
+import { fetchAnalyticsSummary, fetchAnalyticsTimeseries, percentChange, previousPeriodRange } from "@/lib/analytics";
 import type { AnalyticsSummary, Business, DateRangeValue } from "@/types";
 import MetricCard from "@/components/MetricCard";
 import DateRangePicker from "@/components/DateRangePicker";
@@ -43,23 +43,6 @@ function formatNumber(value: string | number): string {
 /** A same-length period immediately preceding the current one, so
  * "vs previous period" compares like-for-like (e.g. a 30-day window
  * against the 30 days before it) rather than an arbitrary lookback. */
-function previousPeriodRange(startDate: string, endDate: string): { start_date: string; end_date: string } {
-  const start = new Date(`${startDate}T00:00:00Z`);
-  const end = new Date(`${endDate}T00:00:00Z`);
-  const durationMs = end.getTime() - start.getTime();
-  const prevEnd = new Date(start.getTime() - 24 * 60 * 60 * 1000);
-  const prevStart = new Date(prevEnd.getTime() - durationMs);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return { start_date: iso(prevStart), end_date: iso(prevEnd) };
-}
-
-/** Relative percentage change, or null when there's no honest baseline
- * to compare against (previous period had literally zero) -- shown as
- * no comparison at all rather than a misleading "+100%"/"-100%"/"∞". */
-function percentChange(current: number, previous: number): number | null {
-  if (previous === 0) return null;
-  return ((current - previous) / previous) * 100;
-}
 
 export default function OverviewPage() {
   const { token } = useAuth();
