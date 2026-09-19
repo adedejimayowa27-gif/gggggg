@@ -29,6 +29,7 @@ import AnalyticsBreakdownPanel from "@/components/AnalyticsBreakdownPanel";
 import ParetoAnalysisPanel from "@/components/ParetoAnalysisPanel";
 import SeasonalityPanel from "@/components/SeasonalityPanel";
 import VarianceSummaryTable from "@/components/VarianceSummaryTable";
+import CustomerLoyaltyPanel from "@/components/CustomerLoyaltyPanel";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./analytics.module.css";
 
@@ -266,6 +267,10 @@ export default function AnalyticsPage() {
           isLoading={isLoadingSummary}
           error={summaryError}
         />
+      </div>
+
+      <div className={styles.loyaltySection}>
+        <CustomerLoyaltyPanel businessId={primaryBusiness.id} dateRange={dateRange} token={token} />
       </div>
     </div>
   );
