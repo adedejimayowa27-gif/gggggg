@@ -32,6 +32,10 @@
   margin-top: 1.5rem;
 }
 
+.paretoSection {
+  margin-top: 1.5rem;
+}
+
 .error {
   color: var(--clay);
   font-size: 0.875rem;
