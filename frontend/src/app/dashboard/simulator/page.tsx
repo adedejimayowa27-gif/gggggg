@@ -35,6 +35,7 @@ import {
   saveSimulation,
   type RunSimulationInput,
 } from "@/lib/simulations";
+import { fetchFieldValues } from "@/lib/transactions";
 import type { ScenarioType, ScopeType, Simulation, SimulationListItem, SimulationRunResult } from "@/types";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./simulator.module.css";
@@ -144,6 +145,24 @@ export default function SimulatorPage() {
 
   const [saved, setSaved] = useState<SimulationListItem[]>([]);
   const [selected, setSelected] = useState<Simulation | null>(null);
+
+  // Real category/product names from this business's own transactions,
+  // offered as suggestions on the scope-value field -- so picking a
+  // scope means choosing from data that actually exists instead of
+  // typing a name that has to match exactly, where a typo would
+  // silently produce a "no data" result with no indication why.
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [productOptions, setProductOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!token || !primaryBusiness) return;
+    fetchFieldValues(primaryBusiness.id, "category", token)
+      .then(setCategoryOptions)
+      .catch(() => undefined);
+    fetchFieldValues(primaryBusiness.id, "product", token)
+      .then(setProductOptions)
+      .catch(() => undefined);
+  }, [token, primaryBusiness]);
 
   // Armed-then-confirm delete: first click arms this id, a second click
   // within the window actually deletes. Auto-disarms after 3s so a
@@ -321,10 +340,21 @@ export default function SimulatorPage() {
               {scopeType === "category" ? "Category name" : "Product name"}
               <input
                 type="text"
+                list="scope-value-options"
                 value={scopeValue}
                 onChange={(e) => setScopeValue(e.target.value)}
                 placeholder={scopeType === "category" ? "e.g. Groceries" : "e.g. Rice"}
               />
+              <datalist id="scope-value-options">
+                {(scopeType === "category" ? categoryOptions : productOptions).map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+              <span className={styles.fieldHint}>
+                {(scopeType === "category" ? categoryOptions : productOptions).length > 0
+                  ? `${(scopeType === "category" ? categoryOptions : productOptions).length} ${scopeType === "category" ? "categories" : "products"} on record -- start typing to see them`
+                  : `No ${scopeType === "category" ? "categories" : "products"} recorded yet -- type a name manually`}
+              </span>
             </label>
           )}
         </div>
