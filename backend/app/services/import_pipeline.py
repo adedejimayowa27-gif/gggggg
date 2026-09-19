@@ -14,7 +14,7 @@ import hashlib
 import io
 import re
 from decimal import Decimal, InvalidOperation
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import openpyxl
 import pandas as pd
@@ -327,16 +327,62 @@ def parse_upload(file_bytes: bytes, filename: str) -> tuple[list[str], list[dict
     return headers, rows
 
 
+# Excel's day-zero. (Not 1900-01-01: Excel treats 1900 as a leap year
+# due to a decades-old Lotus 1-2-3 compatibility bug, so its serial
+# numbers are conventionally reconciled against 1899-12-30 instead.)
+EXCEL_SERIAL_EPOCH = date(1899, 12, 30)
+
+
 def _parse_date_value(value) -> date:
     if value is None or (isinstance(value, str) and not value.strip()):
         raise ValueError("Missing date value.")
+
+    # A bare int/float reaching here (rather than a Timestamp/datetime,
+    # which genuine Excel date-formatted cells already arrive as via
+    # openpyxl) is virtually always an Excel serial date -- days since
+    # 1899-12-30. pandas' generic numeric-to-datetime path assumes any
+    # plain number is nanoseconds since the Unix epoch instead, which
+    # silently turns a realistic serial like 45659 into 1970-01-01, so
+    # numbers are converted explicitly here rather than handed to
+    # pd.to_datetime.
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if pd.isna(value):
+            raise ValueError("Missing date value.")
+        return EXCEL_SERIAL_EPOCH + timedelta(days=int(value))
+
     try:
         parsed = pd.to_datetime(value, errors="raise")
     except Exception as exc:  # noqa: BLE001
         raise ValueError(f"Could not parse '{value}' as a date.") from exc
     if pd.isna(parsed):
         raise ValueError(f"Could not parse '{value}' as a date.")
-    return parsed.date()
+
+    result = parsed.date()
+
+    # A yearless date string ("03 Jan", "3-Jan") doesn't raise -- pandas
+    # fills in year 1 (0001 AD) and returns successfully, so without this
+    # check the row "imports fine" with a date that can never appear in
+    # any realistic date-range view, with no error surfaced to explain
+    # why. Substitute the current year, unless that would place the date
+    # in the future (a sheet exported in December listing "03 Jan" means
+    # the January that already happened, not one 12 months away), in
+    # which case use last year instead.
+    if result.year == 1:
+        today = date.today()
+
+        def safe_replace(d: date, year: int) -> date:
+            try:
+                return d.replace(year=year)
+            except ValueError:
+                # Feb 29 landing on a non-leap year.
+                return d.replace(year=year, day=28)
+
+        candidate = safe_replace(result, today.year)
+        if candidate > today:
+            candidate = safe_replace(candidate, today.year - 1)
+        result = candidate
+
+    return result
 
 
 def _parse_decimal_value(value, field_label: str, allow_negative: bool = False) -> Decimal:
