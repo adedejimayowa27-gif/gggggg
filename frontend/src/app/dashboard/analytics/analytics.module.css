@@ -7,7 +7,29 @@
   margin-bottom: 2rem;
 }
 
-.header h1 {
+.headerText h1 {
   font-size: 1.5rem;
   font-weight: 700;
+}
+
+.subtitle {
+  margin-top: 0.3rem;
+  font-size: 0.875rem;
+  color: var(--sage);
+}
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.chartSection {
+  margin-top: 1.5rem;
+}
+
+.error {
+  color: var(--clay);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
 }
