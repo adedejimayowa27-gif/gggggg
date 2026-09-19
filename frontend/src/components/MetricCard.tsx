@@ -6,7 +6,7 @@ import { useClickOutside } from "@/hooks/useClickOutside";
 import Sparkline from "@/components/Sparkline";
 import styles from "./MetricCard.module.css";
 
-export type MetricIcon = "revenue" | "profit" | "margin" | "transactions" | "products";
+export type MetricIcon = "revenue" | "profit" | "margin" | "transactions" | "products" | "average";
 export type MetricAccent = "gold" | "leaf" | "purple" | "blue" | "neutral";
 
 const ACCENT_VAR: Record<MetricAccent, string> = {
@@ -119,6 +119,19 @@ function Icon({ type }: { type: MetricIcon }) {
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+        </svg>
+      );
+    case "average":
+      return (
+        <svg {...common}>
+          <path
+            d="M4 20V10M10 20V4M16 20v-7M22 20H2"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path d="M3 13h18" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 2" />
         </svg>
       );
   }
