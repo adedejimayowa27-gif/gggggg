@@ -35,6 +35,7 @@ from app.services.analytics import (
     DateRangePreset,
     Granularity,
     cost_expr,
+    get_latest_transaction_date,
     period_filters,
     resolve_date_range,
     revenue_expr,
@@ -53,7 +54,8 @@ def get_analytics_summary(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
+    anchor_today = get_latest_transaction_date(db, business) or date_type.today()
+    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date, today=anchor_today)
 
     row = (
         db.query(
@@ -101,7 +103,8 @@ def get_analytics_timeseries(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
+    anchor_today = get_latest_transaction_date(db, business) or date_type.today()
+    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date, today=anchor_today)
 
     # date_trunc buckets by the given granularity; cast back to Date so the
     # response schema (and the client) get plain dates, not timestamps.
@@ -146,7 +149,8 @@ def get_analytics_products(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
+    anchor_today = get_latest_transaction_date(db, business) or date_type.today()
+    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date, today=anchor_today)
 
     # Single grouped aggregation by product -- every per-product number
     # (units, revenue, cost, profit, count) comes from this one query.
@@ -227,7 +231,8 @@ def get_analytics_breakdown(
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
-    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
+    anchor_today = get_latest_transaction_date(db, business) or date_type.today()
+    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date, today=anchor_today)
     group_column = _GROUP_BY_COLUMNS[group_by]
     revenue_column = revenue_expr()
 
@@ -301,7 +306,8 @@ def get_customer_loyalty(
     not a performance concern, and the logic is far easier to verify
     correct written this way.
     """
-    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date)
+    anchor_today = get_latest_transaction_date(db, business) or date_type.today()
+    resolved_start, resolved_end = resolve_date_range(range, start_date, end_date, today=anchor_today)
 
     period_rows = (
         db.query(
