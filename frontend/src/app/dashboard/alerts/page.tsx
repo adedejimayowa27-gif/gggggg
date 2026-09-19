@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
 import AlertsPanel from "@/components/AlertsPanel";
 import ComingSoon from "@/components/ComingSoon";
+import styles from "./alerts.module.css";
 
 export default function AlertsPage() {
   const { token } = useAuth();
@@ -19,7 +20,12 @@ export default function AlertsPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1.5rem" }}>Alerts</h1>
+      <div className={styles.header}>
+        <div className={styles.headerText}>
+          <h1>Alerts</h1>
+          <p className={styles.subtitle}>Anomalies and risks worth a second look, ranked by severity.</p>
+        </div>
+      </div>
       <AlertsPanel businessId={primaryBusiness.id} token={token} />
     </div>
   );
