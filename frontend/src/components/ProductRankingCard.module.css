@@ -178,6 +178,24 @@
   color: var(--sage);
 }
 
+.marginLabel {
+  font-size: 0.68rem;
+  color: var(--sage);
+  margin-top: 0.1rem;
+}
+
+.marginHealthy {
+  font-size: 0.68rem;
+  color: var(--leaf);
+  margin-top: 0.1rem;
+}
+
+.marginNegative {
+  font-size: 0.68rem;
+  color: var(--clay);
+  margin-top: 0.1rem;
+}
+
 /* ---------- Magnitude bar ---------- */
 /* Mirrors TopProductsPanel's share bar -- badge (24px) + gap (0.75rem)
    = 2.25rem, so the bar starts flush under the product name rather
