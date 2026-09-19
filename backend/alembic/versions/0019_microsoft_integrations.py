@@ -1,7 +1,7 @@
 """create microsoft_integrations table
 
 Revision ID: 0019_microsoft_integrations
-Revises: 0018_transactions_business_date_idx
+Revises: 0018_transactions_biz_date_idx
 Create Date: 2026-09-07
 
 Step 11, Batch 11.9 -- Excel/OneDrive integration, mirroring
@@ -22,7 +22,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "0019_microsoft_integrations"
-down_revision: Union[str, None] = "0018_transactions_business_date_idx"
+down_revision: Union[str, None] = "0018_transactions_biz_date_idx"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
