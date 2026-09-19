@@ -150,6 +150,23 @@ export interface ProductAnalytics {
   slow_moving: ProductAnalyticsItem[];
 }
 
+export interface BreakdownItem {
+  group: string;
+  units_sold: string;
+  revenue: string;
+  total_cost: string;
+  gross_profit: string;
+  transaction_count: number;
+}
+
+export interface AnalyticsBreakdown {
+  start_date: string;
+  end_date: string;
+  group_by: string;
+  items: BreakdownItem[];
+  has_data: boolean;
+}
+
 // --- AI assistant / chat ----------------------------------------------
 //
 // Mirrors backend/app/schemas/chat.py and backend/app/schemas/assistant.py.
