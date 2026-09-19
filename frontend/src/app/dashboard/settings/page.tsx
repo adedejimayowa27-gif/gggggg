@@ -133,7 +133,15 @@ export default function SettingsPage() {
 
   const loadStatus = () => {
     if (!token || !primaryBusiness) return;
-    getGoogleStatus(primaryBusiness.id, token).then(setStatus);
+    // .catch() is not optional here: without it, a failed request never
+    // calls setStatus, which never leaves its initial `undefined` --
+    // and the whole page's loading guard (`status === undefined`) waits
+    // on that forever. A real failure now resolves to `null` (same
+    // shape as "not connected yet"), so the page renders instead of
+    // hanging indefinitely.
+    getGoogleStatus(primaryBusiness.id, token)
+      .then(setStatus)
+      .catch(() => setStatus(null));
   };
 
   useEffect(loadStatus, [token, primaryBusiness]);
@@ -187,7 +195,9 @@ export default function SettingsPage() {
     setSelectedSpreadsheet(id);
     setSelectedWorksheet("");
     if (!token || !primaryBusiness || !id) return;
-    listWorksheets(primaryBusiness.id, id, token).then(setWorksheets);
+    listWorksheets(primaryBusiness.id, id, token)
+      .then(setWorksheets)
+      .catch(() => setWorksheets([]));
   };
 
   const handleSaveSelection = () => {
@@ -235,7 +245,13 @@ export default function SettingsPage() {
   // above exactly) ---
   const loadExcelStatus = () => {
     if (!token || !primaryBusiness) return;
-    getMicrosoftStatus(primaryBusiness.id, token).then(setExcelStatus);
+    // Same reasoning as loadStatus above -- this is the specific call
+    // that's actually failing right now (see the chat explanation): a
+    // missing .catch() here is what turns "Microsoft isn't set up yet"
+    // into "the whole Settings page never finishes loading."
+    getMicrosoftStatus(primaryBusiness.id, token)
+      .then(setExcelStatus)
+      .catch(() => setExcelStatus(null));
   };
 
   useEffect(loadExcelStatus, [token, primaryBusiness]);
@@ -289,7 +305,9 @@ export default function SettingsPage() {
     setSelectedWorkbook(id);
     setSelectedExcelWorksheet("");
     if (!token || !primaryBusiness || !id) return;
-    listExcelWorksheets(primaryBusiness.id, id, token).then(setExcelWorksheets);
+    listExcelWorksheets(primaryBusiness.id, id, token)
+      .then(setExcelWorksheets)
+      .catch(() => setExcelWorksheets([]));
   };
 
   const handleSaveExcelSelection = () => {
