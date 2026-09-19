@@ -113,6 +113,12 @@
   color: var(--sage);
 }
 
+.fieldHint {
+  font-size: 0.72rem;
+  color: var(--sage);
+  opacity: 0.85;
+}
+
 .formRow input,
 .formRow select,
 .field input,
