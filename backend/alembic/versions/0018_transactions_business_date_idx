@@ -1,6 +1,6 @@
 """add composite index on transactions(business_id, date)
 
-Revision ID: 0018_transactions_biz_date_idx
+Revision ID: 0018_transactions_business_date_idx
 Revises: 0017_alert_dedupe_unique
 Create Date: 2026-09-07
 
@@ -25,7 +25,7 @@ from typing import Sequence, Union
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0018_transactions_biz_date_idx"
+revision: str = "0018_transactions_business_date_idx"
 down_revision: Union[str, None] = "0017_alert_dedupe_unique"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
