@@ -7,13 +7,19 @@
   margin-bottom: 2rem;
 }
 
-.header h1 {
+.headerText h1 {
   font-size: 1.5rem;
   font-weight: 700;
 }
 
+.subtitle {
+  margin-top: 0.3rem;
+  font-size: 0.875rem;
+  color: var(--sage);
+}
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1.25rem;
 }
