@@ -22,6 +22,7 @@ from app.models.chat_conversation import ChatConversation
 from app.models.simulation import Simulation
 from app.models.alert import Alert
 from app.models.google_integration import GoogleIntegration
+from app.models.microsoft_integration import MicrosoftIntegration
 from app.models.branch import Branch
 from app.models.team_member import ROLE_ORDER, TeamMember
 from app.models.user import User
@@ -224,6 +225,14 @@ def get_connected_google_integration(business: Business, db: Session) -> GoogleI
     integration = db.query(GoogleIntegration).filter(GoogleIntegration.business_id == business.id).first()
     if not integration:
         raise NotFoundError("No Google account is connected for this business yet.")
+    return integration
+
+
+def get_connected_microsoft_integration(business: Business, db: Session) -> MicrosoftIntegration:
+    """Fetch a business's connected Microsoft account, or 404 if none is connected yet."""
+    integration = db.query(MicrosoftIntegration).filter(MicrosoftIntegration.business_id == business.id).first()
+    if not integration:
+        raise NotFoundError("No Microsoft account is connected for this business yet.")
     return integration
 
 
