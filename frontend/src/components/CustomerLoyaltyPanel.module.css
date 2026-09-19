@@ -1,0 +1,142 @@
+.card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--surface-border);
+  background: var(--ink-raised);
+  padding: 1.25rem;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+}
+
+.iconWrap {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--leaf);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.description {
+  font-size: 0.8rem;
+  color: var(--sage);
+  margin-top: 0.15rem;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  color: var(--sage);
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 0 1rem;
+}
+
+.headline {
+  font-size: 0.9rem;
+  color: var(--paper);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.headline strong {
+  font-weight: 700;
+}
+
+/* ---------- Split bar ---------- */
+
+.splitBar {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-active);
+  margin-bottom: 1.1rem;
+}
+
+.splitNew {
+  background: var(--gold);
+  transition: width 0.4s ease;
+}
+
+.splitReturning {
+  background: var(--leaf);
+  transition: width 0.4s ease;
+}
+
+/* ---------- Segments ---------- */
+
+.segments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.segment {
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+}
+
+.segmentHead {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotNew {
+  background: var(--gold);
+}
+
+.dotReturning {
+  background: var(--leaf);
+}
+
+.segmentLabel {
+  font-size: 0.78rem;
+  color: var(--sage);
+  font-weight: 600;
+}
+
+.segmentValue {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--paper);
+  font-family: var(--font-display);
+}
+
+.segmentSub {
+  font-size: 0.75rem;
+  color: var(--sage);
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 480px) {
+  .segments {
+    grid-template-columns: 1fr;
+  }
+}
