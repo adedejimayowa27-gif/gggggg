@@ -1,0 +1,104 @@
+.card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--surface-border);
+  background: var(--ink-raised);
+  padding: 1.25rem;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.iconWrap {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--viz-purple);
+  background: rgba(167, 139, 250, 0.14);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.description {
+  font-size: 0.8rem;
+  color: var(--sage);
+  margin-top: 0.15rem;
+}
+
+.tabs {
+  display: inline-flex;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.tab {
+  padding: 0.45rem 0.85rem;
+  border: none;
+  border-right: 1px solid var(--surface-border);
+  background: transparent;
+  color: var(--sage);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab:last-child {
+  border-right: none;
+}
+
+.tab:hover {
+  color: var(--paper);
+}
+
+.tabActive,
+.tabActive:hover {
+  background: var(--viz-purple);
+  color: #14151a;
+}
+
+.headline {
+  font-size: 0.9rem;
+  color: var(--paper);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.headline strong {
+  color: var(--paper);
+  font-weight: 700;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 280px;
+  color: var(--sage);
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 0 1rem;
+}
