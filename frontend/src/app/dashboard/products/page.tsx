@@ -6,6 +6,11 @@
  * Renders the four ranked product lists from GET .../analytics/products
  * (top-selling, highest-profit, lowest-profit, slow-moving) behind the
  * same page-level DateRangePicker pattern used by Overview and Analytics.
+ *
+ * Visual pass: brought up to the Overview/Transactions redesign -- a
+ * tinted icon chip and accent color distinguish each list at a glance
+ * (same idea as MetricCard), matching the header/subtitle rhythm the
+ * Overview page already uses.
  */
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -68,7 +73,10 @@ export default function ProductsPage() {
   return (
     <div>
       <div className={styles.header}>
-        <h1>Products</h1>
+        <div className={styles.headerText}>
+          <h1>Products</h1>
+          <p className={styles.subtitle}>Every product ranked by what matters most.</p>
+        </div>
         <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
 
@@ -78,6 +86,8 @@ export default function ProductsPage() {
           description="Most units sold in this range"
           items={data?.top_selling ?? []}
           primaryMetric="units_sold"
+          icon="units"
+          accent="gold"
           isLoading={isLoading}
           error={error}
         />
@@ -86,6 +96,8 @@ export default function ProductsPage() {
           description="Most gross profit generated in this range"
           items={data?.highest_profit ?? []}
           primaryMetric="gross_profit"
+          icon="trendUp"
+          accent="leaf"
           isLoading={isLoading}
           error={error}
         />
@@ -94,6 +106,8 @@ export default function ProductsPage() {
           description="Least gross profit generated in this range"
           items={data?.lowest_profit ?? []}
           primaryMetric="gross_profit"
+          icon="trendDown"
+          accent="clay"
           isLoading={isLoading}
           error={error}
         />
@@ -102,6 +116,8 @@ export default function ProductsPage() {
           description="Fewest units sold in this range"
           items={data?.slow_moving ?? []}
           primaryMetric="units_sold"
+          icon="clock"
+          accent="blue"
           isLoading={isLoading}
           error={error}
         />
