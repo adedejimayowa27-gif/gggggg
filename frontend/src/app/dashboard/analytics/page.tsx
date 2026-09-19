@@ -25,6 +25,7 @@ import type { AnalyticsSummary, DateRangeValue } from "@/types";
 import DateRangePicker from "@/components/DateRangePicker";
 import MetricCard from "@/components/MetricCard";
 import RevenueProfitChart from "@/components/RevenueProfitChart";
+import AnalyticsBreakdownPanel from "@/components/AnalyticsBreakdownPanel";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./analytics.module.css";
 
@@ -241,6 +242,10 @@ export default function AnalyticsPage() {
 
       <div className={styles.chartSection}>
         <RevenueProfitChart businessId={primaryBusiness.id} dateRange={dateRange} token={token} />
+      </div>
+
+      <div className={styles.breakdownSection}>
+        <AnalyticsBreakdownPanel businessId={primaryBusiness.id} dateRange={dateRange} token={token} />
       </div>
 
       {summaryError && <p className={styles.error}>{summaryError}</p>}
