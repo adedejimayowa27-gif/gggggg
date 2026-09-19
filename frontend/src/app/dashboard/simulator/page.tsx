@@ -1,13 +1,29 @@
 "use client";
 
 /**
- * Simulator page (Step 7).
+ * Simulator page.
  *
  * Form to define a scenario -> live preview via POST /simulate (nothing
  * saved) -> optional "save as" -> list of saved simulations, click one to
  * revisit its stored comparison instead of re-running it.
+ *
+ * Reform pass -- both visual and operational:
+ * - Tokens/icon-chip language matching the rest of the redesign, and the
+ *   same white-on-gold contrast bug fixed elsewhere (AI Assistant,
+ *   variance table) fixed here too.
+ * - Current vs Simulated is now a magnitude-bar comparison per metric
+ *   (mirrors ProductRankingCard's bar language), not just four columns
+ *   of numbers -- the difference is visible, not just readable.
+ * - Change-percentage presets (quick +/-5/10/20% buttons) so testing a
+ *   few scenarios doesn't mean typing a number each time.
+ * - Opening a saved simulation now repopulates the form with its exact
+ *   parameters instead of only showing a frozen readout -- so "open a
+ *   past scenario, tweak it, rerun" is actually possible.
+ * - Deleting a saved simulation now requires a second confirming click
+ *   (arms for ~3s, reverts if not confirmed) instead of deleting
+ *   instantly on one click with no way back.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
 import { ApiError } from "@/lib/api";
@@ -30,6 +46,8 @@ const SCENARIO_OPTIONS: { value: ScenarioType; label: string }[] = [
   { value: "sales_volume_change", label: "Sales volume change" },
 ];
 
+const PRESET_PERCENTAGES = [-20, -10, -5, 5, 10, 20];
+
 const currencyFormatter = new Intl.NumberFormat("en-NG", {
   style: "currency",
   currency: "NGN",
@@ -50,6 +68,59 @@ function defaultDate(daysAgo: number): string {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
   return d.toISOString().slice(0, 10);
+}
+
+interface MetricRow {
+  label: string;
+  current: number;
+  simulated: number;
+  currentDisplay: string;
+  simulatedDisplay: string;
+  changeDisplay: string;
+  isImprovement: boolean | null;
+}
+
+function buildMetricRows(view: SimulationRunResult): MetricRow[] {
+  const r = view.results;
+  return [
+    {
+      label: "Revenue",
+      current: Number(r.current.revenue),
+      simulated: Number(r.simulated.revenue),
+      currentDisplay: money(r.current.revenue),
+      simulatedDisplay: money(r.simulated.revenue),
+      changeDisplay: `${money(r.diff.revenue_change)} (${pct(r.diff.revenue_change_pct)})`,
+      isImprovement: r.diff.revenue_change_pct === null ? null : Number(r.diff.revenue_change_pct) > 0,
+    },
+    {
+      label: "Cost",
+      current: Number(r.current.total_cost),
+      simulated: Number(r.simulated.total_cost),
+      currentDisplay: money(r.current.total_cost),
+      simulatedDisplay: money(r.simulated.total_cost),
+      changeDisplay: `${money(r.diff.total_cost_change)} (${pct(r.diff.total_cost_change_pct)})`,
+      // Lower cost is the improvement -- inverted vs. every other row.
+      isImprovement: r.diff.total_cost_change_pct === null ? null : Number(r.diff.total_cost_change_pct) < 0,
+    },
+    {
+      label: "Gross Profit",
+      current: Number(r.current.gross_profit),
+      simulated: Number(r.simulated.gross_profit),
+      currentDisplay: money(r.current.gross_profit),
+      simulatedDisplay: money(r.simulated.gross_profit),
+      changeDisplay: `${money(r.diff.gross_profit_change)} (${pct(r.diff.gross_profit_change_pct)})`,
+      isImprovement: r.diff.gross_profit_change_pct === null ? null : Number(r.diff.gross_profit_change_pct) > 0,
+    },
+    {
+      label: "Profit Margin",
+      current: Number(r.current.profit_margin),
+      simulated: Number(r.simulated.profit_margin),
+      currentDisplay: `${Number(r.current.profit_margin).toFixed(1)}%`,
+      simulatedDisplay: `${Number(r.simulated.profit_margin).toFixed(1)}%`,
+      changeDisplay: `${pct(r.diff.profit_margin_change)} pts`,
+      isImprovement: Number(r.diff.profit_margin_change) > 0,
+    },
+  ];
 }
 
 export default function SimulatorPage() {
@@ -74,6 +145,12 @@ export default function SimulatorPage() {
   const [saved, setSaved] = useState<SimulationListItem[]>([]);
   const [selected, setSelected] = useState<Simulation | null>(null);
 
+  // Armed-then-confirm delete: first click arms this id, a second click
+  // within the window actually deletes. Auto-disarms after 3s so a
+  // stray click days later can't trigger a delete unexpectedly.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const loadSaved = () => {
     if (!token || !primaryBusiness) return;
     listSimulations(primaryBusiness.id, token)
@@ -82,6 +159,11 @@ export default function SimulatorPage() {
   };
 
   useEffect(loadSaved, [token, primaryBusiness]);
+  useEffect(() => {
+    return () => {
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+    };
+  }, []);
 
   const buildInput = (): RunSimulationInput => ({
     scenario_type: scenarioType,
@@ -132,11 +214,29 @@ export default function SimulatorPage() {
       .then((sim) => {
         setSelected(sim);
         setPreview(null);
+        // Repopulate the form with this simulation's exact parameters,
+        // so opening a saved run is a starting point for a new one
+        // (tweak-and-rerun) rather than only a frozen readout.
+        setScenarioType(sim.scenario_type);
+        setScopeType(sim.parameters.scope_type);
+        setScopeValue(sim.parameters.scope_value ?? "");
+        setChangePercentage(sim.parameters.change_percentage);
+        setStartDate(sim.baseline_start_date);
+        setEndDate(sim.baseline_end_date);
+        setRunError(null);
       })
       .catch(() => undefined);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDeleteClick = (id: string) => {
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+      confirmTimeoutRef.current = setTimeout(() => setConfirmDeleteId(null), 3000);
+      return;
+    }
+    if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+    setConfirmDeleteId(null);
     if (!token || !primaryBusiness) return;
     deleteSimulation(primaryBusiness.id, id, token).then(() => {
       if (selected?.id === id) setSelected(null);
@@ -144,30 +244,59 @@ export default function SimulatorPage() {
     });
   };
 
+  const handleNewSimulation = () => {
+    setSelected(null);
+    setPreview(null);
+    setRunError(null);
+    setSaveError(null);
+    setSimulationName("");
+  };
+
   if (isLoadingBusinesses) {
     return <p style={{ color: "var(--muted)" }}>Loading…</p>;
   }
 
   if (!primaryBusiness || !token) {
-    return (
-      <ComingSoon
-        title="Simulator"
-        description="Create a business to start testing decisions here."
-      />
-    );
+    return <ComingSoon title="Simulator" description="Create a business to start testing decisions here." />;
   }
 
   const view = selected ?? preview;
+  const metricRows = view ? buildMetricRows(view) : [];
 
   return (
     <div>
       <div className={styles.header}>
-        <h1>Simulator</h1>
+        <div className={styles.headerText}>
+          <h1>Simulator</h1>
+          <p className={styles.subtitle}>Test a pricing or cost decision before you make it.</p>
+        </div>
+        {(selected || preview) && (
+          <button type="button" className={styles.newButton} onClick={handleNewSimulation}>
+            + New simulation
+          </button>
+        )}
       </div>
 
       <div className={styles.formCard}>
+        <div className={styles.cardHeader}>
+          <div className={styles.iconWrap}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M4 20V10M11 20V4M18 20v-8"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+          </div>
+          <div>
+            <h2 className={styles.cardTitle}>Scenario builder</h2>
+            <p className={styles.cardDescription}>Nothing here is saved until you choose to save it</p>
+          </div>
+        </div>
+
         <div className={styles.formRow}>
-          <label>
+          <label className={styles.field}>
             Variable
             <select value={scenarioType} onChange={(e) => setScenarioType(e.target.value as ScenarioType)}>
               {SCENARIO_OPTIONS.map((opt) => (
@@ -178,7 +307,7 @@ export default function SimulatorPage() {
             </select>
           </label>
 
-          <label>
+          <label className={styles.field}>
             Applies to
             <select value={scopeType} onChange={(e) => setScopeType(e.target.value as ScopeType)}>
               <option value="business">Whole business</option>
@@ -188,7 +317,7 @@ export default function SimulatorPage() {
           </label>
 
           {scopeType !== "business" && (
-            <label>
+            <label className={styles.field}>
               {scopeType === "category" ? "Category name" : "Product name"}
               <input
                 type="text"
@@ -198,24 +327,43 @@ export default function SimulatorPage() {
               />
             </label>
           )}
+        </div>
 
-          <label>
-            Change (%)
+        <div className={styles.field}>
+          <span className={styles.fieldLabel}>Change</span>
+          <div className={styles.changeRow}>
             <input
               type="number"
               step="0.1"
+              className={styles.changeInput}
               value={changePercentage}
               onChange={(e) => setChangePercentage(e.target.value)}
             />
-          </label>
+            <span className={styles.changeSuffix}>%</span>
+            <div className={styles.presets}>
+              {PRESET_PERCENTAGES.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={`${styles.presetChip} ${
+                    Number(changePercentage) === p ? styles.presetChipActive : ""
+                  }`}
+                  onClick={() => setChangePercentage(String(p))}
+                >
+                  {p > 0 ? "+" : ""}
+                  {p}%
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className={styles.formRow}>
-          <label>
+          <label className={styles.field}>
             From
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </label>
-          <label>
+          <label className={styles.field}>
             To
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </label>
@@ -229,52 +377,74 @@ export default function SimulatorPage() {
 
       {view && (
         <div className={styles.resultsCard}>
-          <h2>Current vs Simulated</h2>
+          <div className={styles.cardHeader}>
+            <div className={`${styles.iconWrap} ${styles.iconWrapLeaf}`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M3 17l6-6 4 4 8-8M21 7v6M21 7h-6"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <div>
+              <h2 className={styles.cardTitle}>Current vs. simulated</h2>
+              <p className={styles.cardDescription}>
+                {selected ? `Saved as "${selected.name}"` : "Live preview -- not yet saved"}
+              </p>
+            </div>
+          </div>
 
-          <table className={styles.resultsTable}>
-            <thead>
-              <tr>
-                <th></th>
-                <th>Current</th>
-                <th>Simulated</th>
-                <th>Difference</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Revenue</td>
-                <td>{money(view.results.current.revenue)}</td>
-                <td>{money(view.results.simulated.revenue)}</td>
-                <td>
-                  {money(view.results.diff.revenue_change)} ({pct(view.results.diff.revenue_change_pct)})
-                </td>
-              </tr>
-              <tr>
-                <td>Cost</td>
-                <td>{money(view.results.current.total_cost)}</td>
-                <td>{money(view.results.simulated.total_cost)}</td>
-                <td>
-                  {money(view.results.diff.total_cost_change)} ({pct(view.results.diff.total_cost_change_pct)})
-                </td>
-              </tr>
-              <tr>
-                <td>Gross Profit</td>
-                <td>{money(view.results.current.gross_profit)}</td>
-                <td>{money(view.results.simulated.gross_profit)}</td>
-                <td>
-                  {money(view.results.diff.gross_profit_change)} ({pct(view.results.diff.gross_profit_change_pct)})
-                </td>
-              </tr>
-              <tr>
-                <td>Profit Margin</td>
-                <td>{Number(view.results.current.profit_margin).toFixed(1)}%</td>
-                <td>{Number(view.results.simulated.profit_margin).toFixed(1)}%</td>
-                <td>{pct(view.results.diff.profit_margin_change)} pts</td>
-              </tr>
-            </tbody>
-          </table>
+          <div className={styles.metricList}>
+            {metricRows.map((row) => {
+              const maxValue = Math.max(Math.abs(row.current), Math.abs(row.simulated), 1);
+              const currentWidth = (Math.abs(row.current) / maxValue) * 100;
+              const simulatedWidth = (Math.abs(row.simulated) / maxValue) * 100;
+              return (
+                <div key={row.label} className={styles.metricRow}>
+                  <div className={styles.metricRowHead}>
+                    <span className={styles.metricLabel}>{row.label}</span>
+                    <span
+                      className={
+                        row.isImprovement === null
+                          ? styles.metricChangeNeutral
+                          : row.isImprovement
+                            ? styles.metricChangePositive
+                            : styles.metricChangeNegative
+                      }
+                    >
+                      {row.changeDisplay}
+                    </span>
+                  </div>
+                  <div className={styles.barGroup}>
+                    <div className={styles.barLine}>
+                      <span className={styles.barTag}>Current</span>
+                      <div className={styles.barTrack}>
+                        <div className={styles.barFillCurrent} style={{ width: `${currentWidth}%` }} />
+                      </div>
+                      <span className={styles.barValue}>{row.currentDisplay}</span>
+                    </div>
+                    <div className={styles.barLine}>
+                      <span className={styles.barTag}>Simulated</span>
+                      <div className={styles.barTrack}>
+                        <div
+                          className={
+                            row.isImprovement === false ? styles.barFillNegative : styles.barFillSimulated
+                          }
+                          style={{ width: `${simulatedWidth}%` }}
+                        />
+                      </div>
+                      <span className={styles.barValue}>{row.simulatedDisplay}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
-          <h3>Assumptions</h3>
+          <h3 className={styles.assumptionsTitle}>Assumptions</h3>
           <ul className={styles.assumptions}>
             {view.assumptions.map((a, i) => (
               <li key={i}>{a}</li>
@@ -292,31 +462,60 @@ export default function SimulatorPage() {
               <button onClick={handleSave} disabled={isSaving}>
                 {isSaving ? "Saving…" : "Save"}
               </button>
-              {saveError && <p className={styles.error}>{saveError}</p>}
             </div>
           )}
+          {saveError && <p className={styles.error}>{saveError}</p>}
         </div>
       )}
 
       <div className={styles.savedCard}>
-        <h2>Saved simulations</h2>
-        {saved.length === 0 && <p style={{ color: "var(--muted)" }}>No saved simulations yet.</p>}
-        <ul className={styles.savedList}>
-          {saved.map((s) => (
-            <li key={s.id}>
-              <button className={styles.savedItemButton} onClick={() => handleOpen(s.id)}>
-                <strong>{s.name}</strong>
-                <span>
-                  {s.scenario_type.replace(/_/g, " ")} · {s.parameters.change_percentage}% ·{" "}
-                  {s.parameters.scope_type === "business" ? "whole business" : s.parameters.scope_value}
-                </span>
-              </button>
-              <button className={styles.deleteButton} onClick={() => handleDelete(s.id)} aria-label="Delete">
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className={styles.cardHeader}>
+          <div className={`${styles.iconWrap} ${styles.iconWrapBlue}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+              <path d="M8 3v5h8V3" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <h2 className={styles.cardTitle}>Saved simulations</h2>
+            <p className={styles.cardDescription}>Click one to revisit it, or tweak and rerun</p>
+          </div>
+        </div>
+
+        {saved.length === 0 ? (
+          <div className={styles.emptyState}>No saved simulations yet.</div>
+        ) : (
+          <ul className={styles.savedList}>
+            {saved.map((s) => (
+              <li key={s.id} className={selected?.id === s.id ? styles.savedItemActive : ""}>
+                <button className={styles.savedItemButton} onClick={() => handleOpen(s.id)}>
+                  <span className={styles.savedItemBadge}>{s.parameters.change_percentage}%</span>
+                  <span className={styles.savedItemBody}>
+                    <strong>{s.name}</strong>
+                    <span className={styles.savedItemMeta}>
+                      {s.scenario_type.replace(/_/g, " ")} ·{" "}
+                      {s.parameters.scope_type === "business" ? "whole business" : s.parameters.scope_value}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  className={`${styles.deleteButton} ${
+                    confirmDeleteId === s.id ? styles.deleteButtonConfirm : ""
+                  }`}
+                  onClick={() => handleDeleteClick(s.id)}
+                  aria-label={confirmDeleteId === s.id ? "Confirm delete" : "Delete"}
+                >
+                  {confirmDeleteId === s.id ? "Confirm?" : "×"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
