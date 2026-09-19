@@ -27,6 +27,7 @@ import MetricCard from "@/components/MetricCard";
 import RevenueProfitChart from "@/components/RevenueProfitChart";
 import AnalyticsBreakdownPanel from "@/components/AnalyticsBreakdownPanel";
 import ParetoAnalysisPanel from "@/components/ParetoAnalysisPanel";
+import SeasonalityPanel from "@/components/SeasonalityPanel";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./analytics.module.css";
 
@@ -251,6 +252,10 @@ export default function AnalyticsPage() {
 
       <div className={styles.paretoSection}>
         <ParetoAnalysisPanel businessId={primaryBusiness.id} dateRange={dateRange} token={token} />
+      </div>
+
+      <div className={styles.seasonalitySection}>
+        <SeasonalityPanel businessId={primaryBusiness.id} dateRange={dateRange} token={token} />
       </div>
 
       {summaryError && <p className={styles.error}>{summaryError}</p>}
