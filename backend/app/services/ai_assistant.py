@@ -33,6 +33,7 @@ from app.core.config import settings
 from app.core.exceptions import AppError, ValidationError
 from app.models.business import Business
 from app.services import ai_tools
+from app.services import analytics as analytics_service
 
 logger = logging.getLogger("app")
 
@@ -489,7 +490,15 @@ def _handle_resolve_date_range(db: Session, business: Business, **kwargs) -> dic
     phrase = kwargs.get("phrase")
     if not isinstance(phrase, str) or not phrase.strip():
         raise ValidationError("phrase is required.")
-    start, end = ai_tools.resolve_natural_date_range(phrase)
+    # Anchored to the business's latest transaction date, not the real
+    # calendar date -- same reasoning as the dashboard's analytics
+    # routes: a business whose data was last updated a month ago should
+    # get the assistant's "this week"/"last 7 days" answers about the
+    # most recent week that actually has data, not an empty real-time
+    # week. Keeps the assistant's answers consistent with what the
+    # dashboard itself shows for the same phrase.
+    anchor_today = analytics_service.get_latest_transaction_date(db, business) or date.today()
+    start, end = ai_tools.resolve_natural_date_range(phrase, today=anchor_today)
     return {"start_date": start.isoformat(), "end_date": end.isoformat()}
 
 
