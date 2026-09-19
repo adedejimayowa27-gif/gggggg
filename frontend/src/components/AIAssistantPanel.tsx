@@ -64,8 +64,21 @@ export default function AIAssistantPanel({ businessId, token }: Props) {
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
-        <h2 className={styles.title}>Your AI Assistant</h2>
-        <p className={styles.subtitle}>Ask anything about your business…</p>
+        <div className={styles.iconWrap}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+            <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
+          </svg>
+        </div>
+        <div>
+          <h2 className={styles.title}>Your AI Assistant</h2>
+          <p className={styles.subtitle}>Ask anything about your business…</p>
+        </div>
       </div>
 
       {!lastQuestion && (
