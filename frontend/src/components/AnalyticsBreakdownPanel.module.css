@@ -170,6 +170,21 @@
   color: var(--sage);
 }
 
+.marginLabel {
+  font-size: 0.7rem;
+  color: var(--sage);
+}
+
+.marginHealthy {
+  font-size: 0.7rem;
+  color: var(--leaf);
+}
+
+.marginNegative {
+  font-size: 0.7rem;
+  color: var(--clay);
+}
+
 .barTrack {
   height: 4px;
   border-radius: 999px;
