@@ -9,7 +9,22 @@
 }
 
 .header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
   margin-bottom: 1rem;
+}
+
+.iconWrap {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.12);
 }
 
 .title {
@@ -74,7 +89,7 @@
 
 .error {
   font-size: 0.82rem;
-  color: var(--sage);
+  color: var(--clay);
 }
 
 .continueLink {
