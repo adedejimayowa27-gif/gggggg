@@ -28,6 +28,10 @@
   margin-top: 1.5rem;
 }
 
+.breakdownSection {
+  margin-top: 1.5rem;
+}
+
 .error {
   color: var(--clay);
   font-size: 0.875rem;
