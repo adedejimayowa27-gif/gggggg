@@ -2,6 +2,8 @@
 
 import { useDashboard } from "@/context/DashboardContext";
 import AiAssistantChat from "@/components/AiAssistantChat";
+import ComingSoon from "@/components/ComingSoon";
+import styles from "./ai-assistant.module.css";
 
 export default function AiAssistantPage() {
   const { primaryBusiness, isLoadingBusinesses } = useDashboard();
@@ -12,16 +14,22 @@ export default function AiAssistantPage() {
 
   if (!primaryBusiness) {
     return (
-      <div>
-        <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.5rem" }}>
-          AI Assistant
-        </h1>
-        <p style={{ color: "var(--muted)" }}>
-          Create a business on the Overview page before chatting with the assistant.
-        </p>
-      </div>
+      <ComingSoon
+        title="AI Assistant"
+        description="Create a business on the Overview page before chatting with the assistant."
+      />
     );
   }
 
-  return <AiAssistantChat businessId={primaryBusiness.id} />;
+  return (
+    <div>
+      <div className={styles.header}>
+        <div className={styles.headerText}>
+          <h1>AI Assistant</h1>
+          <p className={styles.subtitle}>Ask questions grounded in your actual sales data.</p>
+        </div>
+      </div>
+      <AiAssistantChat businessId={primaryBusiness.id} />
+    </div>
+  );
 }
