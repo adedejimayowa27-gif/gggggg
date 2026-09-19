@@ -23,6 +23,7 @@ from datetime import date, timedelta
 from enum import Enum
 
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.core.exceptions import ValidationError
 from app.models.business import Business
@@ -153,3 +154,22 @@ def period_filters(business: Business, start_date: date, end_date: date):
         Transaction.date >= start_date,
         Transaction.date <= end_date,
     )
+
+
+def get_latest_transaction_date(db: Session, business: Business) -> date | None:
+    """
+    The most recent transaction date on record for this business, used
+    as the anchor for relative presets (today/7d/30d/90d) in place of
+    the real calendar date.
+
+    Without this, a business whose spreadsheet was last imported a
+    month ago sees every relative preset come back empty: "last 7 days"
+    would mean the 7 days ending on today's real date, none of which
+    exist in their data, rather than the 7 days ending on their actual
+    most recent sale. Every analytics endpoint resolves its date range
+    against this instead of `date.today()`, so "last 7 days" always
+    means the latest 7 days that could plausibly have data -- and still
+    falls back to the real today for a brand-new business with no
+    transactions yet, where there's no "latest data" to anchor to.
+    """
+    return db.query(func.max(Transaction.date)).filter(Transaction.business_id == business.id).scalar()
