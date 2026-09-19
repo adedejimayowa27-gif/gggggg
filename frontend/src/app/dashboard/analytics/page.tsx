@@ -26,6 +26,7 @@ import DateRangePicker from "@/components/DateRangePicker";
 import MetricCard from "@/components/MetricCard";
 import RevenueProfitChart from "@/components/RevenueProfitChart";
 import AnalyticsBreakdownPanel from "@/components/AnalyticsBreakdownPanel";
+import ParetoAnalysisPanel from "@/components/ParetoAnalysisPanel";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./analytics.module.css";
 
@@ -246,6 +247,10 @@ export default function AnalyticsPage() {
 
       <div className={styles.breakdownSection}>
         <AnalyticsBreakdownPanel businessId={primaryBusiness.id} dateRange={dateRange} token={token} />
+      </div>
+
+      <div className={styles.paretoSection}>
+        <ParetoAnalysisPanel businessId={primaryBusiness.id} dateRange={dateRange} token={token} />
       </div>
 
       {summaryError && <p className={styles.error}>{summaryError}</p>}
