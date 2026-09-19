@@ -46,6 +46,14 @@ function formatCurrency(value: string): string {
   return currencyFormatter.format(Number(value));
 }
 
+/** Gross margin % for a breakdown row -- absent from the panel until
+ * now, which meant a high-revenue, low-margin segment could look
+ * better than a smaller, more profitable one at a glance. */
+function marginPct(item: { revenue: string; gross_profit: string }): number {
+  const revenue = Number(item.revenue);
+  return revenue !== 0 ? (Number(item.gross_profit) / revenue) * 100 : 0;
+}
+
 function TagIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -164,6 +172,17 @@ export default function AnalyticsBreakdownPanel({ businessId, dateRange, token }
                   <div className={styles.rowMetric}>
                     <span className={styles.metricValue}>{formatCurrency(item.revenue)}</span>
                     <span className={styles.metricLabel}>revenue</span>
+                    <span
+                      className={
+                        marginPct(item) < 0
+                          ? styles.marginNegative
+                          : marginPct(item) >= 20
+                            ? styles.marginHealthy
+                            : styles.marginLabel
+                      }
+                    >
+                      {numberFormatter.format(marginPct(item))}% margin
+                    </span>
                   </div>
                 </div>
                 <div className={styles.barTrack}>
