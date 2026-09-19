@@ -28,6 +28,7 @@ import RevenueProfitChart from "@/components/RevenueProfitChart";
 import AnalyticsBreakdownPanel from "@/components/AnalyticsBreakdownPanel";
 import ParetoAnalysisPanel from "@/components/ParetoAnalysisPanel";
 import SeasonalityPanel from "@/components/SeasonalityPanel";
+import VarianceSummaryTable from "@/components/VarianceSummaryTable";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./analytics.module.css";
 
@@ -258,7 +259,14 @@ export default function AnalyticsPage() {
         <SeasonalityPanel businessId={primaryBusiness.id} dateRange={dateRange} token={token} />
       </div>
 
-      {summaryError && <p className={styles.error}>{summaryError}</p>}
+      <div className={styles.varianceSection}>
+        <VarianceSummaryTable
+          summary={summary}
+          previousSummary={previousSummary}
+          isLoading={isLoadingSummary}
+          error={summaryError}
+        />
+      </div>
     </div>
   );
 }
