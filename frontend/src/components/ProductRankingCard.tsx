@@ -61,6 +61,14 @@ function primaryLabel(metric: PrimaryMetric): string {
   return metric === "units_sold" ? "units" : "profit";
 }
 
+/** Gross margin % for a product row -- absent from this card until
+ * now, which meant a high-revenue, low-margin product could look like
+ * a stronger performer than a smaller, more profitable one. */
+function marginPct(item: ProductAnalyticsItem): number {
+  const revenue = Number(item.revenue);
+  return revenue !== 0 ? (Number(item.gross_profit) / revenue) * 100 : 0;
+}
+
 /** Absolute size used to scale each row's magnitude bar -- abs() so a
  * list of losses (lowest-profit, all negative) still produces a
  * meaningful, non-zero-width bar relative to its own worst offender,
@@ -217,6 +225,17 @@ export default function ProductRankingCard({
                       {primaryValue(item, primaryMetric)}
                     </span>
                     <span className={styles.metricLabel}>{primaryLabel(primaryMetric)}</span>
+                    <span
+                      className={
+                        marginPct(item) < 0
+                          ? styles.marginNegative
+                          : marginPct(item) >= 20
+                            ? styles.marginHealthy
+                            : styles.marginLabel
+                      }
+                    >
+                      {numberFormatter.format(marginPct(item))}% margin
+                    </span>
                   </div>
                 </div>
                 <div className={styles.barTrack}>
