@@ -7,43 +7,104 @@
   margin-bottom: 1.5rem;
 }
 
-.header h1 {
+.headerText h1 {
   font-size: 1.5rem;
   font-weight: 700;
+}
+
+.subtitle {
+  margin-top: 0.3rem;
+  font-size: 0.875rem;
+  color: var(--sage);
+}
+
+/* ---------- Invite card ---------- */
+
+.inviteCard {
+  background: var(--ink-raised);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+}
+
+.iconWrap {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.12);
+}
+
+.cardTitle {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.cardDescription {
+  font-size: 0.8rem;
+  color: var(--sage);
+  margin-top: 0.15rem;
 }
 
 .inviteForm {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 1rem;
 }
 
 .input {
   flex: 1 1 240px;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--surface-border);
-  border-radius: 6px;
-  background: #10131b;
-  color: inherit;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--paper);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--gold);
 }
 
 .select {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--surface-border);
-  border-radius: 6px;
-  background: #10131b;
-  color: inherit;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--paper);
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--gold);
 }
 
 .button {
   padding: 0.5rem 1rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: none;
-  background: var(--accent, #4c6ef5);
-  color: #fff;
-  font-weight: 600;
+  background: var(--gold);
+  color: #14151a;
+  font-weight: 700;
   cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .button:disabled {
@@ -51,15 +112,35 @@
   cursor: not-allowed;
 }
 
-.error {
-  color: #e5484d;
+.feedback {
+  color: var(--leaf);
   font-size: 0.85rem;
+  margin-top: 0.6rem;
+}
+
+.error {
+  color: var(--clay);
+  font-size: 0.85rem;
+  margin-top: 0.6rem;
   margin-bottom: 1rem;
 }
 
+/* ---------- Empty state ---------- */
+
+.emptyState {
+  padding: 1.75rem 1rem;
+  text-align: center;
+  border: 1px dashed var(--surface-border);
+  border-radius: var(--radius-md);
+  color: var(--sage);
+  font-size: 0.85rem;
+}
+
+/* ---------- Member list ---------- */
+
 .list {
   border: 1px solid var(--surface-border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -69,30 +150,100 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #171b25;
+  border-bottom: 1px solid var(--surface-border);
   flex-wrap: wrap;
+  transition: background 0.15s ease;
 }
 
 .row:last-child {
   border-bottom: none;
 }
 
+.row:hover {
+  background: var(--surface-active);
+}
+
 .rowLeft {
   display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.avatar {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.avatarGold {
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.14);
+}
+
+.avatarLeaf {
+  color: var(--leaf);
+  background: rgba(52, 211, 153, 0.14);
+}
+
+.avatarPurple {
+  color: var(--viz-purple);
+  background: rgba(167, 139, 250, 0.16);
+}
+
+.avatarBlue {
+  color: var(--viz-blue);
+  background: rgba(91, 141, 239, 0.16);
+}
+
+.identity {
+  display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.2rem;
   min-width: 0;
 }
 
 .email {
   font-weight: 600;
   font-size: 0.9rem;
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.status {
-  font-size: 0.78rem;
-  color: var(--muted);
+.youTag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--sage);
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+
+.statusBadge {
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
   text-transform: capitalize;
+}
+
+.statusActive {
+  color: var(--leaf);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.statusPending {
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.12);
 }
 
 .rowRight {
@@ -107,16 +258,33 @@
   font-weight: 600;
   padding: 0.15rem 0.6rem;
   border-radius: 999px;
-  background: var(--surface-border);
+  background: var(--surface-active);
+  color: var(--paper);
   text-transform: capitalize;
+}
+
+.roleOwner {
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.12);
 }
 
 .removeButton {
   padding: 0.35rem 0.7rem;
-  border-radius: 6px;
-  border: 1px solid #3a1f24;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-border);
   background: transparent;
-  color: #e5484d;
+  color: var(--clay);
   font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
+}
+
+.removeButton:hover {
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.removeButtonConfirm {
+  background: var(--clay);
+  color: #14151a;
+  border-color: var(--clay);
 }
