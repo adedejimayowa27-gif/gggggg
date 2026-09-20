@@ -145,6 +145,24 @@ class Settings(BaseSettings):
     # sampled transaction.
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
 
+    # --- Transactional email ---
+    # Empty by default so local/dev/test setups without a Resend account
+    # still boot; app.services.email logs and no-ops (rather than
+    # raising) if a send is attempted with this unset, since a missing
+    # email provider shouldn't take down password reset or alerts --
+    # it should just mean no email goes out, same "degrade, don't crash"
+    # posture as GROQ_API_KEY and the Stripe keys above.
+    RESEND_API_KEY: str = ""
+    # Must be a verified sender domain/address in the Resend account,
+    # or Resend will reject the send outright.
+    EMAIL_FROM_ADDRESS: str = "BizIntel <onboarding@resend.dev>"
+
+    # --- Password reset ---
+    # Short-lived on purpose -- a reset link is a bearer credential
+    # capable of taking over an account, so it should stop working well
+    # before someone forgets they ever requested it.
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
