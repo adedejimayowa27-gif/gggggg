@@ -8,6 +8,17 @@
  * require_business_role -- see app/api/deps.py); a plain member/viewer
  * gets a 404 from the API, shown here as an access notice rather than a
  * generic error, since it's an expected/correct outcome, not a bug.
+ *
+ * Reform pass -- both operational and visual:
+ * - The log previously showed the action and target but never who did
+ *   it -- actor_user_id was fetched but never displayed (and wasn't
+ *   human-readable anyway, just a UUID). The backend now resolves it to
+ *   a name/email (see routes/audit_logs.py), shown here with a colored
+ *   initial avatar, matching the Team page's identity treatment.
+ * - Timestamps were a verbose full locale string; now a relative time
+ *   ("2h ago") with the exact timestamp available on hover via title,
+ *   matching the pattern used on Alerts.
+ * - Tokens instead of hardcoded hex, row hover-lift, icon chip header.
  */
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -18,8 +29,28 @@ import type { AuditLogEntry } from "@/types";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./audit-log.module.css";
 
+const AVATAR_ACCENTS = ["avatarGold", "avatarLeaf", "avatarPurple", "avatarBlue"] as const;
+
+function avatarAccentFor(key: string): (typeof AVATAR_ACCENTS)[number] {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return AVATAR_ACCENTS[hash % AVATAR_ACCENTS.length];
+}
+
 function formatAction(action: string): string {
   return action.replace(/_/g, " ").replace(/\./g, " · ");
+}
+
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 30) return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
 export default function AuditLogPage() {
@@ -84,29 +115,46 @@ export default function AuditLogPage() {
   return (
     <div>
       <div className={styles.header}>
-        <h1>Audit Log</h1>
+        <div className={styles.headerText}>
+          <h1>Audit Log</h1>
+          <p className={styles.subtitle}>Who did what on this business, most recent first.</p>
+        </div>
       </div>
 
       {error && <p className={styles.error}>{error}</p>}
       {isLoading ? (
         <p style={{ color: "var(--muted)" }}>Loading…</p>
+      ) : logs?.length === 0 ? (
+        <div className={styles.emptyState}>No activity recorded yet.</div>
       ) : (
         <div className={styles.list}>
-          {logs?.map((entry) => (
-            <div key={entry.id} className={styles.row}>
-              <div className={styles.rowLeft}>
-                <span className={styles.action}>{formatAction(entry.action)}</span>
-                {entry.target_type && (
-                  <span className={styles.target}>
-                    {entry.target_type}
-                    {entry.target_id ? ` · ${entry.target_id.slice(0, 8)}` : ""}
-                  </span>
-                )}
+          {logs?.map((entry) => {
+            const name = entry.actor_display_name;
+            const initial = name ? name.trim().charAt(0).toUpperCase() : "?";
+            const accent = avatarAccentFor(name ?? "system");
+            return (
+              <div key={entry.id} className={styles.row}>
+                <div className={styles.rowLeft}>
+                  <span className={`${styles.avatar} ${styles[accent]}`}>{initial}</span>
+                  <div className={styles.rowText}>
+                    <div className={styles.actionLine}>
+                      <span className={styles.actor}>{name ?? "System"}</span>
+                      <span className={styles.action}>{formatAction(entry.action)}</span>
+                    </div>
+                    {entry.target_type && (
+                      <span className={styles.target}>
+                        {entry.target_type}
+                        {entry.target_id ? ` · ${entry.target_id.slice(0, 8)}` : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className={styles.timestamp} title={new Date(entry.created_at).toLocaleString()}>
+                  {relativeTime(entry.created_at)}
+                </span>
               </div>
-              <span className={styles.timestamp}>{new Date(entry.created_at).toLocaleString()}</span>
-            </div>
-          ))}
-          {logs?.length === 0 && <p style={{ color: "var(--muted)" }}>No activity recorded yet.</p>}
+            );
+          })}
         </div>
       )}
     </div>
