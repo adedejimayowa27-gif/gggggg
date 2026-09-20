@@ -62,11 +62,9 @@ export default function DashboardTopbar({ onMenuToggle }: Props) {
 
   const handleSearchSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    // Honest scope: there's no cross-entity search endpoint behind this
-    // yet, so this doesn't pretend to filter results -- it takes you to
-    // the one place a typed query is actually most likely about.
-    if (searchValue.trim()) {
-      router.push("/dashboard/transactions");
+    const trimmed = searchValue.trim();
+    if (trimmed) {
+      router.push(`/dashboard/transactions?q=${encodeURIComponent(trimmed)}`);
     }
   };
 
