@@ -71,6 +71,10 @@ export default function LoginPage() {
               />
             </label>
 
+            <p className={styles.footerText} style={{ textAlign: "right", marginTop: "-0.5rem" }}>
+              <Link href="/forgot-password">Forgot password?</Link>
+            </p>
+
             {error && <p className={styles.error}>{error}</p>}
 
             <button className={styles.button} type="submit" disabled={isSubmitting}>
