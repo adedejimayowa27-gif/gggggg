@@ -6,7 +6,7 @@
  * OAuth callbacks' ?google=connected/error and ?microsoft=connected/error
  * redirects.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
@@ -106,6 +106,13 @@ export default function SettingsPage() {
   const [newBranchName, setNewBranchName] = useState("");
   const [branchError, setBranchError] = useState<string | null>(null);
 
+  // Same armed-then-confirm delete pattern as Simulator and Team: first
+  // click arms this id, a second click within the window actually
+  // removes -- branch removal previously happened instantly on one
+  // click with no way back.
+  const [confirmDeleteBranchId, setConfirmDeleteBranchId] = useState<string | null>(null);
+  const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const loadBranches = () => {
     if (!token || !primaryBusiness) return;
     listBranches(primaryBusiness.id, token)
@@ -114,6 +121,11 @@ export default function SettingsPage() {
   };
 
   useEffect(loadBranches, [token, primaryBusiness]);
+  useEffect(() => {
+    return () => {
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+    };
+  }, []);
 
   const handleAddBranch = () => {
     if (!token || !primaryBusiness || !newBranchName.trim()) return;
@@ -127,6 +139,14 @@ export default function SettingsPage() {
   };
 
   const handleDeleteBranch = (branchId: string) => {
+    if (confirmDeleteBranchId !== branchId) {
+      setConfirmDeleteBranchId(branchId);
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+      confirmTimeoutRef.current = setTimeout(() => setConfirmDeleteBranchId(null), 3000);
+      return;
+    }
+    if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+    setConfirmDeleteBranchId(null);
     if (!token || !primaryBusiness) return;
     deleteBranch(primaryBusiness.id, branchId, token).then(loadBranches);
   };
@@ -368,12 +388,28 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1.5rem" }}>Settings</h1>
+      <div className={styles.header}>
+        <div className={styles.headerText}>
+          <h1>Settings</h1>
+          <p className={styles.subtitle}>Connect your data sources and manage branches.</p>
+        </div>
+      </div>
 
       {callbackNotice && <p className={styles.notice}>{callbackNotice}</p>}
 
       <div className={styles.card}>
-        <h2>Google Sheets Integration</h2>
+        <div className={styles.cardHeader}>
+          <div className={styles.iconWrap}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M3 9h18M9 21V9" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+          </div>
+          <div>
+            <h2 className={styles.cardTitle}>Google Sheets</h2>
+            <p className={styles.cardDescription}>Import transactions directly from a Google Sheet</p>
+          </div>
+        </div>
 
         {!status && (
           <>
@@ -388,15 +424,14 @@ export default function SettingsPage() {
 
         {status && (
           <>
-            <p className={styles.connectedRow}>
-              Connected as <strong>{status.google_email}</strong>
-              {status.status === "error" && (
-                <span className={styles.errorBadge}>Reconnect needed</span>
-              )}
+            <div className={styles.connectedRow}>
+              <span className={styles.connectedBadge}>Connected</span>
+              <span className={styles.connectedEmail}>{status.google_email}</span>
+              {status.status === "error" && <span className={styles.errorBadge}>Reconnect needed</span>}
               <button className={styles.linkButton} onClick={handleDisconnect}>
                 Disconnect
               </button>
-            </p>
+            </div>
 
             {!spreadsheets.length && (
               <button className={styles.primaryButton} onClick={loadSpreadsheets} disabled={isBusy}>
@@ -524,7 +559,18 @@ export default function SettingsPage() {
       </div>
 
       <div className={styles.card}>
-        <h2>Microsoft Excel Integration</h2>
+        <div className={styles.cardHeader}>
+          <div className={`${styles.iconWrap} ${styles.iconWrapLeaf}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M9 3v18M3 9h6M3 15h6" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+          </div>
+          <div>
+            <h2 className={styles.cardTitle}>Microsoft Excel</h2>
+            <p className={styles.cardDescription}>Import transactions directly from an Excel workbook on OneDrive</p>
+          </div>
+        </div>
 
         {excelCallbackNotice && <p className={styles.notice}>{excelCallbackNotice}</p>}
 
@@ -542,15 +588,16 @@ export default function SettingsPage() {
 
         {excelStatus && (
           <>
-            <p className={styles.connectedRow}>
-              Connected as <strong>{excelStatus.microsoft_email}</strong>
+            <div className={styles.connectedRow}>
+              <span className={styles.connectedBadge}>Connected</span>
+              <span className={styles.connectedEmail}>{excelStatus.microsoft_email}</span>
               {excelStatus.status === "error" && (
                 <span className={styles.errorBadge}>Reconnect needed</span>
               )}
               <button className={styles.linkButton} onClick={handleDisconnectExcel}>
                 Disconnect
               </button>
-            </p>
+            </div>
 
             {!workbooks.length && (
               <button className={styles.primaryButton} onClick={loadWorkbooks} disabled={isExcelBusy}>
@@ -688,25 +735,47 @@ export default function SettingsPage() {
       </div>
 
       <div className={styles.card}>
-        <h2>Branches</h2>
-        <p className={styles.muted}>
-          Optional -- organize this business&apos;s activity by location if it has more than one.
-        </p>
+        <div className={styles.cardHeader}>
+          <div className={`${styles.iconWrap} ${styles.iconWrapBlue}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M3 21V9l9-6 9 6v12M9 21v-8h6v8"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <div>
+            <h2 className={styles.cardTitle}>Branches</h2>
+            <p className={styles.cardDescription}>
+              Optional -- organize this business&apos;s activity by location if it has more than one
+            </p>
+          </div>
+        </div>
 
-        {branches.length === 0 && <p className={styles.muted}>No branches yet.</p>}
-        <ul className={styles.savedList}>
-          {branches.map((b) => (
-            <li key={b.id} className={styles.branchRow}>
-              <span>
-                {b.name}
-                {b.is_default && <span className={styles.defaultTag}> (default)</span>}
-              </span>
-              <button className={styles.linkButton} onClick={() => handleDeleteBranch(b.id)}>
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
+        {branches.length === 0 ? (
+          <p className={styles.muted}>No branches yet.</p>
+        ) : (
+          <ul className={styles.savedList}>
+            {branches.map((b) => (
+              <li key={b.id} className={styles.branchRow}>
+                <span>
+                  {b.name}
+                  {b.is_default && <span className={styles.defaultTag}> (default)</span>}
+                </span>
+                <button
+                  className={`${styles.removeButton} ${
+                    confirmDeleteBranchId === b.id ? styles.removeButtonConfirm : ""
+                  }`}
+                  onClick={() => handleDeleteBranch(b.id)}
+                >
+                  {confirmDeleteBranchId === b.id ? "Confirm?" : "Remove"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
 
         <div className={styles.formRow}>
           <input
