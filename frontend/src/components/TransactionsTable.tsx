@@ -9,6 +9,11 @@ import styles from "./TransactionsTable.module.css";
 interface Props {
   businessId: string;
   refreshSignal?: number;
+  /** Pre-fills the search box -- set from the URL's ?q= param, so
+   * arriving here via the topbar search (which navigates to
+   * /dashboard/transactions?q=...) actually shows filtered results
+   * instead of silently discarding what was typed. */
+  initialQuery?: string;
 }
 
 const PAGE_SIZE = 25;
@@ -63,23 +68,26 @@ function SkeletonRows() {
   );
 }
 
-export default function TransactionsTable({ businessId, refreshSignal }: Props) {
+export default function TransactionsTable({ businessId, refreshSignal, initialQuery }: Props) {
   const { token } = useAuth();
   const [data, setData] = useState<PaginatedTransactions | null>(null);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState(initialQuery ?? "");
+  const [activeQuery, setActiveQuery] = useState(initialQuery ?? "");
 
   useEffect(() => {
     if (!token) return;
     setIsLoading(true);
+    const queryParam = activeQuery ? `&q=${encodeURIComponent(activeQuery)}` : "";
     apiFetch<PaginatedTransactions>(
-      `/businesses/${businessId}/transactions?page=${page}&page_size=${PAGE_SIZE}`,
+      `/businesses/${businessId}/transactions?page=${page}&page_size=${PAGE_SIZE}${queryParam}`,
       { authToken: token }
     )
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setIsLoading(false));
-  }, [businessId, token, page, refreshSignal]);
+  }, [businessId, token, page, refreshSignal, activeQuery]);
 
   // Refreshing after a new import should show the latest data, not
   // whatever page the user happened to be on before.
@@ -87,11 +95,48 @@ export default function TransactionsTable({ businessId, refreshSignal }: Props) 
     setPage(1);
   }, [refreshSignal]);
 
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    setActiveQuery(searchInput.trim());
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput("");
+    setActiveQuery("");
+    setPage(1);
+  };
+
   if (!isLoading && (!data || data.total === 0)) {
     return (
-      <div className={styles.empty}>
-        <p className={styles.emptyTitle}>No transactions yet</p>
-        <p className={styles.emptyBody}>Upload a file above to see your sales history here.</p>
+      <div>
+        <form className={styles.searchRow} onSubmit={handleSearchSubmit}>
+          <input
+            type="search"
+            placeholder="Search by product, category, customer, payment method…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className={styles.searchInput}
+          />
+          {activeQuery && (
+            <button type="button" className={styles.clearButton} onClick={handleClearSearch}>
+              Clear
+            </button>
+          )}
+        </form>
+        <div className={styles.empty}>
+          {activeQuery ? (
+            <>
+              <p className={styles.emptyTitle}>No matches for &ldquo;{activeQuery}&rdquo;</p>
+              <p className={styles.emptyBody}>Try a different product, category, customer, or payment method.</p>
+            </>
+          ) : (
+            <>
+              <p className={styles.emptyTitle}>No transactions yet</p>
+              <p className={styles.emptyBody}>Upload a file above to see your sales history here.</p>
+            </>
+          )}
+        </div>
       </div>
     );
   }
@@ -100,6 +145,25 @@ export default function TransactionsTable({ businessId, refreshSignal }: Props) 
 
   return (
     <div className={styles.wrap}>
+      <form className={styles.searchRow} onSubmit={handleSearchSubmit}>
+        <input
+          type="search"
+          placeholder="Search by product, category, customer, payment method…"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className={styles.searchInput}
+        />
+        {activeQuery && (
+          <button type="button" className={styles.clearButton} onClick={handleClearSearch}>
+            Clear
+          </button>
+        )}
+      </form>
+      {activeQuery && data && (
+        <p className={styles.resultCount}>
+          {data.total} {data.total === 1 ? "result" : "results"} for &ldquo;{activeQuery}&rdquo;
+        </p>
+      )}
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
