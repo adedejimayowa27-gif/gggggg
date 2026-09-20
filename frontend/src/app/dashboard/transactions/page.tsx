@@ -1,6 +1,13 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * useSearchParams() requires a Suspense boundary around whatever calls
+ * it, or Next's static-export step fails at build time -- same issue as
+ * reset-password/page.tsx, same fix: the actual content lives in
+ * TransactionsPageContent, and the default export just wraps it in
+ * <Suspense>.
+ */
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDashboard } from "@/context/DashboardContext";
 import TransactionImportWizard from "@/components/TransactionImportWizard";
@@ -8,7 +15,7 @@ import TransactionsTable from "@/components/TransactionsTable";
 import ImportHistoryList from "@/components/ImportHistoryList";
 import styles from "./transactions.module.css";
 
-export default function TransactionsPage() {
+function TransactionsPageContent() {
   const { primaryBusiness, isLoadingBusinesses } = useDashboard();
   const [refreshSignal, setRefreshSignal] = useState(0);
   const searchParams = useSearchParams();
@@ -49,5 +56,13 @@ export default function TransactionsPage() {
         <TransactionsTable businessId={primaryBusiness.id} refreshSignal={refreshSignal} initialQuery={initialQuery} />
       </div>
     </div>
+  );
+}
+
+export default function TransactionsPage() {
+  return (
+    <Suspense fallback={<p className={styles.muted}>Loading…</p>}>
+      <TransactionsPageContent />
+    </Suspense>
   );
 }
