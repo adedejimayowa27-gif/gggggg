@@ -7,73 +7,122 @@
   margin-bottom: 1.5rem;
 }
 
-.header h1 {
+.headerText h1 {
   font-size: 1.5rem;
   font-weight: 700;
 }
 
+.subtitle {
+  margin-top: 0.3rem;
+  font-size: 0.875rem;
+  color: var(--sage);
+}
+
 .error {
-  color: #e5484d;
+  color: var(--clay);
   font-size: 0.85rem;
   margin-bottom: 1rem;
 }
 
 .notice {
-  color: var(--muted);
+  color: var(--sage);
   font-size: 0.85rem;
   margin-bottom: 1rem;
   padding: 0.75rem 1rem;
   border: 1px solid var(--surface-border);
-  border-radius: 8px;
-  background: #10131b;
+  border-radius: var(--radius-md);
+  background: var(--ink-raised);
 }
 
-.currentPlan {
+/* ---------- Current plan summary ---------- */
+
+.currentPlanCard {
   display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.85rem;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--ink-raised);
+  padding: 1rem 1.25rem;
   margin-bottom: 1.5rem;
 }
 
+.iconWrap {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.12);
+}
+
 .currentPlanLabel {
-  font-size: 0.8rem;
-  color: var(--muted);
+  font-size: 0.78rem;
+  color: var(--sage);
+}
+
+.currentPlanNameRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-top: 0.1rem;
 }
 
 .currentPlanName {
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.1rem;
+  color: var(--paper);
 }
 
 .currentPlanStatus {
-  font-size: 0.78rem;
-  color: var(--muted);
+  font-size: 0.75rem;
+  color: var(--sage);
   text-transform: capitalize;
 }
+
+/* ---------- Plan grid ---------- */
 
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .planCard {
   border: 1px solid var(--surface-border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--ink-raised);
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.planCard:hover {
+  border-color: var(--surface-active);
+  transform: translateY(-2px);
+}
+
+.planCardCurrent {
+  border-color: var(--gold);
 }
 
 .planName {
+  font-family: var(--font-display);
   font-size: 1.1rem;
   font-weight: 700;
+  color: var(--paper);
 }
 
 .planPrice {
-  font-size: 1.3rem;
+  font-size: 1.4rem;
   font-weight: 700;
+  color: var(--paper);
   margin-bottom: 0.25rem;
 }
 
@@ -81,21 +130,36 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.82rem;
-  color: var(--muted);
-  margin-bottom: 0.75rem;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  color: var(--sage);
+  margin-bottom: 0.85rem;
+}
+
+.planLimits li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.planLimits li svg {
+  flex-shrink: 0;
+  color: var(--leaf);
 }
 
 .button {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--radius-sm);
   border: none;
-  background: var(--accent, #4c6ef5);
-  color: #fff;
-  font-weight: 600;
+  background: var(--gold);
+  color: #14151a;
+  font-weight: 700;
   cursor: pointer;
   align-self: flex-start;
+}
+
+.button:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .button:disabled {
@@ -105,9 +169,10 @@
 
 .currentBadge {
   font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.25rem 0.7rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
   border-radius: 999px;
-  background: var(--surface-border);
+  background: rgba(255, 214, 10, 0.12);
+  color: var(--gold);
   align-self: flex-start;
 }
