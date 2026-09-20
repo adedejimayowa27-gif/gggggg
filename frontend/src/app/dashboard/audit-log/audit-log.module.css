@@ -7,20 +7,35 @@
   margin-bottom: 1.5rem;
 }
 
-.header h1 {
+.headerText h1 {
   font-size: 1.5rem;
   font-weight: 700;
 }
 
+.subtitle {
+  margin-top: 0.3rem;
+  font-size: 0.875rem;
+  color: var(--sage);
+}
+
 .error {
-  color: #e5484d;
+  color: var(--clay);
   font-size: 0.85rem;
   margin-bottom: 1rem;
 }
 
+.emptyState {
+  padding: 1.75rem 1rem;
+  text-align: center;
+  border: 1px dashed var(--surface-border);
+  border-radius: var(--radius-md);
+  color: var(--sage);
+  font-size: 0.85rem;
+}
+
 .list {
   border: 1px solid var(--surface-border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -29,35 +44,94 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.65rem 1rem;
-  border-bottom: 1px solid #171b25;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--surface-border);
   flex-wrap: wrap;
+  transition: background 0.15s ease;
 }
 
 .row:last-child {
   border-bottom: none;
 }
 
+.row:hover {
+  background: var(--surface-active);
+}
+
 .rowLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.avatarGold {
+  color: var(--gold);
+  background: rgba(255, 214, 10, 0.14);
+}
+
+.avatarLeaf {
+  color: var(--leaf);
+  background: rgba(52, 211, 153, 0.14);
+}
+
+.avatarPurple {
+  color: var(--viz-purple);
+  background: rgba(167, 139, 250, 0.16);
+}
+
+.avatarBlue {
+  color: var(--viz-blue);
+  background: rgba(91, 141, 239, 0.16);
+}
+
+.rowText {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
   min-width: 0;
 }
 
-.action {
-  font-weight: 600;
+.actionLine {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.actor {
+  font-weight: 700;
   font-size: 0.88rem;
+  color: var(--paper);
+}
+
+.action {
+  font-size: 0.85rem;
+  color: var(--sage);
   text-transform: capitalize;
 }
 
 .target {
   font-size: 0.76rem;
-  color: var(--muted);
+  color: var(--sage);
+  opacity: 0.85;
 }
 
 .timestamp {
   font-size: 0.78rem;
-  color: var(--muted);
+  color: var(--sage);
   flex-shrink: 0;
+  cursor: default;
 }
