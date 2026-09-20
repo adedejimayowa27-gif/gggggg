@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useDashboard } from "@/context/DashboardContext";
 import TransactionImportWizard from "@/components/TransactionImportWizard";
 import TransactionsTable from "@/components/TransactionsTable";
@@ -10,6 +11,8 @@ import styles from "./transactions.module.css";
 export default function TransactionsPage() {
   const { primaryBusiness, isLoadingBusinesses } = useDashboard();
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("q") ?? undefined;
 
   if (isLoadingBusinesses) {
     return <p className={styles.muted}>Loading…</p>;
@@ -43,7 +46,7 @@ export default function TransactionsPage() {
 
       <div>
         <h2 className={styles.sectionTitle}>All Transactions</h2>
-        <TransactionsTable businessId={primaryBusiness.id} refreshSignal={refreshSignal} />
+        <TransactionsTable businessId={primaryBusiness.id} refreshSignal={refreshSignal} initialQuery={initialQuery} />
       </div>
     </div>
   );
