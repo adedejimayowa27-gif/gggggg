@@ -6,7 +6,7 @@
  * OAuth callbacks' ?google=connected/error and ?microsoft=connected/error
  * redirects.
  */
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
@@ -64,7 +64,7 @@ const FIELD_LABELS: Record<StandardField, string> = {
 };
 const OPTIONAL_FIELDS: StandardField[] = ["cost_price", "category", "customer", "payment_method"];
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const { token } = useAuth();
   const { primaryBusiness, isLoadingBusinesses } = useDashboard();
   const searchParams = useSearchParams();
@@ -791,5 +791,13 @@ export default function SettingsPage() {
         {branchError && <p className={styles.error}>{branchError}</p>}
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<p style={{ color: "var(--muted)" }}>Loading…</p>}>
+      <SettingsPageContent />
+    </Suspense>
   );
 }
