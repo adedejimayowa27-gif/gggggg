@@ -10,6 +10,15 @@
  * backend has real Stripe keys set -- shown here as an informational
  * notice, not an error, since it's an expected state before Stripe is
  * configured, not a bug.
+ *
+ * Reform pass: tokens instead of hardcoded hex, the same gold-contrast
+ * bug fixed elsewhere fixed here too, proper currency formatting
+ * (previously a raw "₦${price_ngn}" string with no thousands
+ * separator), limit lines get checkmark icons instead of a bare list,
+ * and the current plan's card gets a visibly highlighted border rather
+ * than only a small badge easy to miss. Only one plan ("Free") is
+ * actually seeded today, so the grid is built to look right at any
+ * plan count rather than assuming a specific tier structure.
  */
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -19,6 +28,29 @@ import { getSubscription, listPlans, startCheckout } from "@/lib/billing";
 import type { Plan, Subscription } from "@/types";
 import ComingSoon from "@/components/ComingSoon";
 import styles from "./billing.module.css";
+
+const currencyFormatter = new Intl.NumberFormat("en-NG", {
+  style: "currency",
+  currency: "NGN",
+  maximumFractionDigits: 0,
+});
+
+function formatPrice(priceNgn: string | number): string {
+  return Number(priceNgn) === 0 ? "Free" : `${currencyFormatter.format(Number(priceNgn))}/mo`;
+}
+
+function limitText(limit: number | null, singular: string, plural: string): string {
+  if (limit === null) return `Unlimited ${plural}`;
+  return `${limit} ${limit === 1 ? singular : plural}`;
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 export default function BillingPage() {
   const { token } = useAuth();
@@ -93,7 +125,10 @@ export default function BillingPage() {
   return (
     <div>
       <div className={styles.header}>
-        <h1>Billing</h1>
+        <div className={styles.headerText}>
+          <h1>Billing</h1>
+          <p className={styles.subtitle}>Your plan and usage limits for this business.</p>
+        </div>
       </div>
 
       {error && <p className={styles.error}>{error}</p>}
@@ -109,10 +144,20 @@ export default function BillingPage() {
       ) : (
         <>
           {subscription && (
-            <div className={styles.currentPlan}>
-              <span className={styles.currentPlanLabel}>Current plan</span>
-              <span className={styles.currentPlanName}>{subscription.plan.name}</span>
-              <span className={styles.currentPlanStatus}>{subscription.status}</span>
+            <div className={styles.currentPlanCard}>
+              <div className={styles.iconWrap}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M2 10h20" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+              </div>
+              <div>
+                <span className={styles.currentPlanLabel}>Current plan</span>
+                <div className={styles.currentPlanNameRow}>
+                  <span className={styles.currentPlanName}>{subscription.plan.name}</span>
+                  <span className={styles.currentPlanStatus}>{subscription.status}</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -120,26 +165,25 @@ export default function BillingPage() {
             {plans.map((plan) => {
               const isCurrent = subscription?.plan.key === plan.key;
               return (
-                <div key={plan.id} className={styles.planCard}>
+                <div key={plan.id} className={`${styles.planCard} ${isCurrent ? styles.planCardCurrent : ""}`}>
                   <h2 className={styles.planName}>{plan.name}</h2>
-                  <p className={styles.planPrice}>
-                    {Number(plan.price_ngn) === 0 ? "Free" : `₦${plan.price_ngn}/mo`}
-                  </p>
+                  <p className={styles.planPrice}>{formatPrice(plan.price_ngn)}</p>
                   <ul className={styles.planLimits}>
                     <li>
-                      {plan.max_businesses_per_user ?? "Unlimited"} business
-                      {plan.max_businesses_per_user === 1 ? "" : "es"}
+                      <CheckIcon />
+                      {limitText(plan.max_businesses_per_user, "business", "businesses")}
                     </li>
                     <li>
-                      {plan.max_branches_per_business ?? "Unlimited"} branch
-                      {plan.max_branches_per_business === 1 ? "" : "es"} per business
+                      <CheckIcon />
+                      {limitText(plan.max_branches_per_business, "branch", "branches")} per business
                     </li>
                     <li>
-                      {plan.max_team_members_per_business ?? "Unlimited"} team member
-                      {plan.max_team_members_per_business === 1 ? "" : "s"}
+                      <CheckIcon />
+                      {limitText(plan.max_team_members_per_business, "team member", "team members")}
                     </li>
                     <li>
-                      {plan.max_transactions_per_month ?? "Unlimited"} transactions/month
+                      <CheckIcon />
+                      {limitText(plan.max_transactions_per_month, "transaction", "transactions")}/month
                     </li>
                   </ul>
                   {isCurrent ? (
