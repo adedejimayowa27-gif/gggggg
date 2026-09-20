@@ -93,3 +93,106 @@ def render_password_reset_email(reset_url: str) -> tuple[str, str]:
       </p>
     """
     return subject, _base_template("Reset your password", body)
+
+
+def render_team_invite_email(business_name: str, inviter_email: str, signup_url: str) -> tuple[str, str]:
+    """
+    Returns (subject, html) for a team invite email.
+
+    Unlike password reset, there's no token in this link -- inviting
+    someone only creates a pending TeamMember row keyed by email (see
+    app/services/team.py's link_pending_invites); whoever signs up with
+    this exact email address is automatically linked. The link here is
+    just a convenience straight to signup, not a credential.
+    """
+    subject = f"You've been invited to {business_name} on BizIntel"
+    body = f"""
+      <p style="font-size: 14px; line-height: 1.6;">
+        <strong>{inviter_email}</strong> has invited you to join <strong>{business_name}</strong> on BizIntel.
+        Sign up using this exact email address to get access automatically.
+      </p>
+      <p style="margin: 24px 0;">
+        <a href="{signup_url}" style="background: #ffd60a; color: #14151a; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block;">
+          Create your account
+        </a>
+      </p>
+    """
+    return subject, _base_template(f"Join {business_name}", body)
+
+
+SEVERITY_COLOR = {
+    "CRITICAL": "#f87171",
+    "HIGH": "#f87171",
+    "MEDIUM": "#ffd60a",
+    "LOW": "#8b8d96",
+}
+
+
+def render_alert_notification_email(business_name: str, alerts: list) -> tuple[str, str]:
+    """
+    Returns (subject, html) for a batch of newly-detected alerts --
+    one email per detection run per recipient, not one email per alert,
+    so five alerts firing at once produces one email to open, not five.
+    `alerts` is a list of Alert ORM objects (severity/title/message).
+    """
+    count = len(alerts)
+    subject = f"{count} new {'alert' if count == 1 else 'alerts'} for {business_name}"
+
+    rows = "".join(
+        f"""
+        <div style="padding: 12px 0; border-bottom: 1px solid #e5e5e5;">
+          <span style="display: inline-block; font-size: 11px; font-weight: 700; color: {SEVERITY_COLOR.get(a.severity, '#8b8d96')}; margin-bottom: 4px;">
+            {a.severity}
+          </span>
+          <div style="font-size: 14px; font-weight: 700; color: #1a1a1a;">{a.title}</div>
+          <div style="font-size: 13px; color: #555555; margin-top: 2px;">{a.message}</div>
+        </div>
+        """
+        for a in alerts
+    )
+    body = f"""
+      <p style="font-size: 14px; line-height: 1.6;">
+        BizIntel found {count} new {"issue" if count == 1 else "issues"} worth a look in <strong>{business_name}</strong>:
+      </p>
+      {rows}
+      <p style="font-size: 13px; color: #666666; margin-top: 16px;">
+        Open the Alerts page in BizIntel to review, resolve, or dismiss these.
+      </p>
+    """
+    return subject, _base_template(f"New activity in {business_name}", body)
+
+
+def notify_team_of_new_alerts(db, business, alerts: list) -> None:
+    """
+    Emails every active team member (owner included -- the owner has
+    their own "owner"-role TeamMember row, same as everyone else) about
+    a batch of newly-detected alerts, restricted to HIGH/CRITICAL
+    severity only. LOW/MEDIUM alerts still show up in-app -- they're
+    just not urgent enough to interrupt someone's inbox for, matching
+    how a Critical production incident gets paged but a minor one
+    doesn't.
+
+    Local imports (TeamMember, User) avoid a hard dependency from this
+    module on the ORM at import time, consistent with this app's other
+    service modules (see alert_engine.py's own local Alert import).
+    """
+    from app.models.team_member import TeamMember
+    from app.models.user import User
+
+    urgent = [a for a in alerts if a.severity in ("HIGH", "CRITICAL")]
+    if not urgent:
+        return
+
+    recipients = (
+        db.query(User.email)
+        .join(TeamMember, TeamMember.user_id == User.id)
+        .filter(TeamMember.business_id == business.id, TeamMember.status == "active")
+        .distinct()
+        .all()
+    )
+    if not recipients:
+        return
+
+    subject, html = render_alert_notification_email(business.name, urgent)
+    for (email,) in recipients:
+        send_email(email, subject, html)
