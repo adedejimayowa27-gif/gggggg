@@ -11,13 +11,21 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.core.exceptions import ConflictError, UnauthorizedError
+from app.core.exceptions import ConflictError, UnauthorizedError, ValidationError
 from app.core.rate_limit import limiter
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    create_password_reset_token,
+    decode_password_reset_token,
+    hash_password,
+    verify_password,
+)
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import Token, UserCreate, UserLogin, UserOut
+from app.schemas.user import ForgotPasswordRequest, ResetPasswordRequest, Token, UserCreate, UserLogin, UserOut
 from app.services.audit import client_ip, log_action
+from app.services.email import render_password_reset_email, send_email
 from app.services.team import link_pending_invites
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -89,3 +97,50 @@ def logout(current_user: User = Depends(get_current_user)):
 @router.get("/me", response_model=UserOut)
 def read_current_user(current_user: User = Depends(get_current_user)):
     return UserOut.model_validate(current_user)
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
+def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Always returns the same generic message, whether or not the email
+    matches an account -- this is the standard defense against account
+    enumeration (an attacker learning which emails are registered by
+    comparing responses). The actual reset email is only ever sent when
+    a matching, active account exists; a non-matching email silently
+    does nothing beyond returning the same response.
+    """
+    user = db.query(User).filter(User.email == payload.email).first()
+    if user and user.is_active:
+        reset_token = create_password_reset_token(str(user.id))
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+        subject, html = render_password_reset_email(reset_url)
+        send_email(user.email, subject, html)
+        log_action(
+            db, "auth.password_reset_requested", actor_user_id=user.id,
+            target_type="user", target_id=str(user.id), ip_address=client_ip(request),
+        )
+
+    return {"message": "If an account exists for that email, a reset link has been sent."}
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
+def reset_password(payload: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    user_id = decode_password_reset_token(payload.token)
+    if not user_id:
+        raise ValidationError("This reset link is invalid or has expired.")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active:
+        raise ValidationError("This reset link is invalid or has expired.")
+
+    user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+
+    log_action(
+        db, "auth.password_reset_completed", actor_user_id=user.id,
+        target_type="user", target_id=str(user.id), ip_address=client_ip(request),
+    )
+
+    return {"message": "Password updated. You can now log in with your new password."}
