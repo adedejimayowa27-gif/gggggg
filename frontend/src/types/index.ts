@@ -479,6 +479,7 @@ export interface AuditLogEntry {
   id: string;
   business_id: string | null;
   actor_user_id: string | null;
+  actor_display_name: string | null;
   action: string;
   target_type: string | null;
   target_id: string | null;
