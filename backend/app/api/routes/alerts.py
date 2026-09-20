@@ -17,6 +17,7 @@ from app.models.alert import Alert
 from app.models.business import Business
 from app.schemas.alert import AlertListItem, AlertOut, AlertStatus, AlertStatusUpdateIn
 from app.services.alert_engine import run_all_detectors
+from app.services.email import notify_team_of_new_alerts
 
 router = APIRouter(prefix="/businesses/{business_id}/alerts", tags=["alerts"])
 
@@ -28,6 +29,10 @@ def run_alert_detection(
 ):
     """Run every registered detector now; returns only newly-created alerts (duplicates are skipped)."""
     created = run_all_detectors(db, business)
+    # Best-effort -- notify_team_of_new_alerts never raises (send_email
+    # swallows its own failures), so a broken email provider can't turn
+    # a successful detection run into a failed request.
+    notify_team_of_new_alerts(db, business, created)
     return [AlertOut.model_validate(a) for a in created]
 
 
