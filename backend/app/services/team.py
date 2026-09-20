@@ -1,19 +1,21 @@
 """
 Team membership service (Step 10, Batch 10.2, requirement #4).
 
-Invite flow, deliberately simple since this app has no email-sending
-infrastructure: inviting someone by email creates a TeamMember row
+Invite flow: inviting someone by email creates a TeamMember row
 immediately. If a User with that email already exists, it's linked and
 active right away. If not, it's stored "pending" with just the email --
 whoever eventually signs up with that exact email gets automatically
 linked and activated (see link_pending_invites, called from the signup
-route). The business owner is expected to tell the invitee out-of-band
-("hey, sign up with this email") since there's no invite email to send.
+route). An invite email is sent either way (see app.services.email) --
+best-effort, so a missing/misconfigured email provider degrades to the
+original behavior (the inviter tells the invitee out-of-band) rather
+than failing the invite itself.
 """
 import uuid
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.exceptions import ConflictError, ValidationError
 from app.models.business import Business
 from app.models.team_member import ROLE_ORDER, TeamMember
@@ -70,6 +72,20 @@ def invite_member(db: Session, business: Business, invited_by: User, email: str,
     db.add(member)
     db.commit()
     db.refresh(member)
+
+    # Best-effort -- send_email itself never raises (it logs and returns
+    # False on any failure), so a broken/unconfigured email provider
+    # can't turn a successful invite into a failed request. If they
+    # already have an account, send them straight to login instead of
+    # signup -- telling an existing user to "create an account" with an
+    # email that already has one is confusing, not just redundant.
+    from app.services.email import render_team_invite_email, send_email  # local import, same reason as billing above
+
+    destination_path = "/login" if existing_user else "/signup"
+    signup_url = f"{settings.FRONTEND_URL}{destination_path}"
+    subject, html = render_team_invite_email(business.name, invited_by.email, signup_url)
+    send_email(normalized_email, subject, html)
+
     return member
 
 
