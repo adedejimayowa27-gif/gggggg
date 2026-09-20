@@ -29,6 +29,7 @@ from app.models.google_integration import GoogleIntegration
 from app.models.microsoft_integration import MicrosoftIntegration
 from app.services.excel_sync import sync_now as sync_excel_now
 from app.services.alert_engine import run_all_detectors
+from app.services.email import notify_team_of_new_alerts
 from app.services.retention import run_scheduled_data_retention
 from app.services.sheets_sync import sync_now
 
@@ -56,6 +57,11 @@ def run_scheduled_alert_detection() -> None:
             try:
                 created = run_all_detectors(db, business)
                 created_total += len(created)
+                # Best-effort, same as the manual /alerts/run route --
+                # a broken email provider must never fail the scheduled
+                # job itself, which is why it's inside this same
+                # per-business try/except rather than its own.
+                notify_team_of_new_alerts(db, business, created)
             except Exception:  # noqa: BLE001 -- one business's failure must not stop the rest
                 logger.exception("Scheduled alert detection failed for business %s", business.id)
         logger.info(
