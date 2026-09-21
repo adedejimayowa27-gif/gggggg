@@ -32,7 +32,7 @@ TAGS_METADATA = [
     },
     {
         "name": "team",
-        "description": "Team members and role-based permissions for a business (owner/admin/manager/staff). Invite, list, change role, remove.",
+        "description": "Team members and role-based permissions for a business (owner/admin/member/viewer). Invite, list, change role, remove.",
     },
     {
         "name": "billing",
@@ -73,5 +73,9 @@ TAGS_METADATA = [
     {
         "name": "google-integration",
         "description": "Connect a Google Sheet as a recurring transaction data source, synced on a schedule.",
+    },
+    {
+        "name": "microsoft-integration",
+        "description": "Connect an Excel workbook on OneDrive as a recurring transaction data source, synced on a schedule. Read-only access.",
     },
 ]
