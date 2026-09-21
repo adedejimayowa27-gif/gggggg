@@ -10,7 +10,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_owned_business, get_owned_simulation
+from app.api.deps import get_owned_business, get_owned_simulation, require_business_role
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.simulation import Simulation
@@ -50,7 +50,7 @@ def run_simulation_preview(
 def create_simulation(
     payload: SimulationCreateIn,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     results, assumptions = run_scenario(
         db, business, payload.scenario_type, payload.parameters,
@@ -103,7 +103,7 @@ def get_simulation(
 def delete_simulation(
     simulation_id: uuid.UUID,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     simulation = get_owned_simulation(simulation_id, business, db)
     db.delete(simulation)
