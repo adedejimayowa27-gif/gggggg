@@ -14,22 +14,24 @@ Roles, most to least privileged: owner > admin > member > viewer.
 - owner: full control, including removing other team members. A
   business's original owner_id user always has this role and can never
   be removed or demoted by anyone (enforced at the route layer).
-- admin: can manage team membership and connected integrations, but
-  isn't the billing-responsible party.
-- member: normal day-to-day access (import data, run syncs/simulations,
-  manage alerts) but can't manage the team.
-- viewer: read-only.
+- admin: everything a member can do, plus manage team membership, connect
+  and configure integrations (Google Sheets, Excel/OneDrive), delete
+  branches, read the audit log and start a plan upgrade.
+- member: normal day-to-day work -- import data, run syncs, manage alerts,
+  save and delete simulations, add and edit branches -- but can't manage
+  the team or set up integrations.
+- viewer: read-only. Sees everything the business shows, and can use tools
+  that change nothing (the what-if preview, the AI assistant), but can't
+  import, sync, change or delete anything.
 
-Scope note: this batch wires role checks into team management itself and
-into the clearly "structural/destructive" existing actions (disconnecting
-Google, deleting a branch). It deliberately does NOT retrofit granular
-role checks into every pre-existing route (transactions, analytics,
-imports, simulations, alerts, chat, assistant) -- those remain accessible
-to any active team member regardless of role, exactly as they were
-accessible to any authenticated owner before this batch. The
-require_business_role dependency this batch adds (see app.api.deps) is
-reusable, so extending finer-grained checks to more routes later is a
-route-by-route addition, not a redesign.
+Enforcement (Batch 12.4): every route under /businesses/{business_id}/...
+declares its minimum role through app.api.deps -- get_owned_business for
+read-only routes, require_business_role("member" | "admin" | "owner") for
+everything else. The full table is in docs/API.md ("Roles and
+permissions"), and tests/test_role_permissions.py fails if a route is added
+without a declared role or a write route is left open to viewers.
+(Before this batch only team management and a couple of destructive
+actions checked roles; every other route accepted any active team member.)
 
 status: "active" (can use the business now) or "pending" (invited by
 email, but no account with that email exists yet -- see
