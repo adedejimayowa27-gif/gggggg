@@ -21,6 +21,7 @@ layer:
 """
 from datetime import date, timedelta
 from enum import Enum
+import uuid
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -142,18 +143,25 @@ def transaction_count_expr():
     return func.count(Transaction.id)
 
 
-def period_filters(business: Business, start_date: date, end_date: date):
+def period_filters(business: Business, start_date: date, end_date: date, branch_id: uuid.UUID | None = None):
     """
-    The (business_id, date >= start, date <= end) filter triple every
-    query in this app scopes by. Returns a tuple so callers can splat it
-    straight into `.filter(*period_filters(...))` alongside any extra
-    filters of their own (e.g. a product-name match).
+    The (business_id, date >= start, date <= end[, branch_id]) filter
+    tuple every query in this app scopes by. Returns a tuple so callers
+    can splat it straight into `.filter(*period_filters(...))` alongside
+    any extra filters of their own (e.g. a product-name match).
+    branch_id is optional and appended only when given, so every
+    existing caller that doesn't pass it keeps filtering exactly as
+    before -- branch scoping is opt-in, not a behavior change for
+    businesses that never use branches.
     """
-    return (
+    filters = [
         Transaction.business_id == business.id,
         Transaction.date >= start_date,
         Transaction.date <= end_date,
-    )
+    ]
+    if branch_id is not None:
+        filters.append(Transaction.branch_id == branch_id)
+    return tuple(filters)
 
 
 def get_latest_transaction_date(db: Session, business: Business) -> date | None:
