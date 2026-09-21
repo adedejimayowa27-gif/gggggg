@@ -7,6 +7,7 @@ transactions.py -- every route depends on get_owned_business.
 All figures are computed via SQL aggregation (SUM/COUNT in the DB), never
 pulled into Python and summed in a loop, and never estimated by an LLM.
 """
+import uuid
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -51,6 +52,7 @@ def get_analytics_summary(
     range: DateRangePreset = Query(default=DateRangePreset.LAST_30D),
     start_date: date_type | None = Query(default=None),
     end_date: date_type | None = Query(default=None),
+    branch_id: uuid.UUID | None = Query(default=None, description="Restrict to one branch."),
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
@@ -64,7 +66,7 @@ def get_analytics_summary(
             units_expr().label("units_sold"),
             transaction_count_expr().label("transaction_count"),
         )
-        .filter(*period_filters(business, resolved_start, resolved_end))
+        .filter(*period_filters(business, resolved_start, resolved_end, branch_id=branch_id))
         .one()
     )
 
@@ -99,6 +101,7 @@ def get_analytics_timeseries(
     range: DateRangePreset = Query(default=DateRangePreset.LAST_30D),
     start_date: date_type | None = Query(default=None),
     end_date: date_type | None = Query(default=None),
+    branch_id: uuid.UUID | None = Query(default=None, description="Restrict to one branch."),
     granularity: Granularity = Query(default=Granularity.DAY),
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
@@ -116,7 +119,7 @@ def get_analytics_timeseries(
             revenue_expr().label("revenue"),
             cost_expr().label("total_cost"),
         )
-        .filter(*period_filters(business, resolved_start, resolved_end))
+        .filter(*period_filters(business, resolved_start, resolved_end, branch_id=branch_id))
         .group_by(period_expr)
         .order_by(period_expr)
         .all()
@@ -145,6 +148,7 @@ def get_analytics_products(
     range: DateRangePreset = Query(default=DateRangePreset.LAST_30D),
     start_date: date_type | None = Query(default=None),
     end_date: date_type | None = Query(default=None),
+    branch_id: uuid.UUID | None = Query(default=None, description="Restrict to one branch."),
     limit: int = Query(default=10, ge=1, le=50),
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
@@ -174,7 +178,7 @@ def get_analytics_products(
             cost_expr().label("total_cost"),
             transaction_count_expr().label("transaction_count"),
         )
-        .filter(*period_filters(business, resolved_start, resolved_end))
+        .filter(*period_filters(business, resolved_start, resolved_end, branch_id=branch_id))
         .group_by(Transaction.product)
         .all()
     )
@@ -227,6 +231,7 @@ def get_analytics_breakdown(
     range: DateRangePreset = Query(default=DateRangePreset.LAST_30D),
     start_date: date_type | None = Query(default=None),
     end_date: date_type | None = Query(default=None),
+    branch_id: uuid.UUID | None = Query(default=None, description="Restrict to one branch."),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
@@ -244,7 +249,7 @@ def get_analytics_breakdown(
             cost_expr().label("total_cost"),
             transaction_count_expr().label("transaction_count"),
         )
-        .filter(*period_filters(business, resolved_start, resolved_end))
+        .filter(*period_filters(business, resolved_start, resolved_end, branch_id=branch_id))
         .group_by(group_column)
         .order_by(revenue_column.desc())
         .limit(limit)
@@ -284,6 +289,7 @@ def get_customer_loyalty(
     range: DateRangePreset = Query(default=DateRangePreset.LAST_30D),
     start_date: date_type | None = Query(default=None),
     end_date: date_type | None = Query(default=None),
+    branch_id: uuid.UUID | None = Query(default=None, description="Restrict to one branch."),
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
@@ -316,7 +322,7 @@ def get_customer_loyalty(
             cost_expr().label("total_cost"),
             transaction_count_expr().label("transaction_count"),
         )
-        .filter(*period_filters(business, resolved_start, resolved_end))
+        .filter(*period_filters(business, resolved_start, resolved_end, branch_id=branch_id))
         .filter(Transaction.customer.isnot(None))
         .group_by(Transaction.customer)
         .all()
