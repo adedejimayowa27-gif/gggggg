@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchBlob, ApiError } from "@/lib/api";
 import { listBranches } from "@/lib/branches";
 import type { Branch, PaginatedTransactions } from "@/types";
 import styles from "./TransactionsTable.module.css";
@@ -113,6 +113,43 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
     setBranchFilter(value);
   };
 
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExport = async () => {
+    if (!token) return;
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      const params = new URLSearchParams();
+      if (activeQuery) params.set("q", activeQuery);
+      if (branchFilter) params.set("branch_id", branchFilter);
+      const blob = await apiFetchBlob(
+        `/businesses/${businessId}/transactions/export?${params.toString()}`,
+        { authToken: token }
+      );
+      // The backend sets a real filename via Content-Disposition, but
+      // that header isn't reachable from a Blob -- the browser applies
+      // it automatically for a same-origin navigation, but this is a
+      // fetch()'d blob turned into a synthetic download, so the `a`
+      // tag's own `download` attribute is what actually names the file
+      // here. Close enough (a fixed name rather than the server's exact
+      // one) and simpler than re-parsing the response headers for it.
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "transactions.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof ApiError ? err.message : "Could not export transactions.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
@@ -131,34 +168,45 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
   // branches, so a business that's never touched that feature sees no
   // change here.
   const filterBar = (
-    <form className={styles.searchRow} onSubmit={handleSearchSubmit}>
-      <input
-        type="search"
-        placeholder="Search by product, category, customer, payment method…"
-        value={searchInput}
-        onChange={(e) => setSearchInput(e.target.value)}
-        className={styles.searchInput}
-      />
-      {branches.length > 0 && (
-        <select
-          value={branchFilter}
-          onChange={(e) => handleBranchFilterChange(e.target.value)}
-          className={styles.branchSelect}
+    <>
+      <form className={styles.searchRow} onSubmit={handleSearchSubmit}>
+        <input
+          type="search"
+          placeholder="Search by product, category, customer, payment method…"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className={styles.searchInput}
+        />
+        {branches.length > 0 && (
+          <select
+            value={branchFilter}
+            onChange={(e) => handleBranchFilterChange(e.target.value)}
+            className={styles.branchSelect}
+          >
+            <option value="">All branches</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
+        {activeQuery && (
+          <button type="button" className={styles.clearButton} onClick={handleClearSearch}>
+            Clear
+          </button>
+        )}
+        <button
+          type="button"
+          className={styles.exportButton}
+          onClick={handleExport}
+          disabled={isExporting}
         >
-          <option value="">All branches</option>
-          {branches.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      )}
-      {activeQuery && (
-        <button type="button" className={styles.clearButton} onClick={handleClearSearch}>
-          Clear
+          {isExporting ? "Exporting…" : "Export CSV"}
         </button>
-      )}
-    </form>
+      </form>
+      {exportError && <p className={styles.exportError}>{exportError}</p>}
+    </>
   );
 
   if (!isLoading && (!data || data.total === 0)) {
