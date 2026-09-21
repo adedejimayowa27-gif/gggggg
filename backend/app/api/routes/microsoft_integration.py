@@ -77,7 +77,7 @@ def connect_microsoft(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     log_action(
         db, "microsoft_integration.connect_initiated", business_id=business.id, actor_user_id=current_user.id,
@@ -148,7 +148,7 @@ def disconnect_microsoft(
 @router.get("/workbooks", response_model=list[WorkbookOut])
 def get_workbooks(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """Excel workbooks the connected Microsoft account can see, for the user to pick from."""
     integration = get_connected_microsoft_integration(business, db)
@@ -160,7 +160,7 @@ def get_workbooks(
 def get_worksheets(
     workbook_item_id: str,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """Worksheet (tab) names within one chosen workbook."""
     integration = get_connected_microsoft_integration(business, db)
@@ -172,7 +172,7 @@ def get_worksheets(
 def set_selection(
     payload: ExcelSelectionIn,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """
     Saves which workbook + worksheet this business will sync from.
@@ -201,7 +201,7 @@ def set_selection(
 @router.get("/preview", response_model=ExcelPreviewOut)
 def get_worksheet_preview(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """
     Reads the currently-selected worksheet right now and suggests a
@@ -222,7 +222,7 @@ def get_worksheet_preview(
 def set_mapping(
     payload: ExcelMappingIn,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """Saves the confirmed column mapping -- every future 'Sync Now' reuses this automatically."""
     integration = get_connected_microsoft_integration(business, db)
@@ -235,7 +235,7 @@ def run_sync(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     """
     'Sync Now': re-reads the worksheet, validates every row through the
