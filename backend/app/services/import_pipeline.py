@@ -26,6 +26,14 @@ REQUIRED_FIELDS = ["date", "product", "quantity", "selling_price"]
 # standard schema (see Transaction model). All three are optional, same
 # as cost_price -- a file that doesn't have them, or a user who leaves
 # them unmapped, imports exactly as before.
+#
+# "branch" (added later) is optional the same way, but unlike the other
+# optional fields it isn't stored as free text -- Transaction.branch_id
+# is a foreign key, not a string column. validate_and_convert_rows below
+# still only ever produces a plain branch_name string (it has no DB
+# access, by design -- see its own docstring); execute_confirmed_import
+# is what resolves that name to an actual Branch row per business,
+# since that's the only place in this pipeline with a DB session.
 STANDARD_FIELDS = [
     "date",
     "product",
@@ -35,6 +43,7 @@ STANDARD_FIELDS = [
     "category",
     "customer",
     "payment_method",
+    "branch",
 ]
 OPTIONAL_FIELDS = [f for f in STANDARD_FIELDS if f not in REQUIRED_FIELDS]
 
@@ -74,6 +83,9 @@ FIELD_SYNONYMS: dict[str, list[str]] = {
     "payment_method": [
         "payment method", "payment type", "payment mode", "method of payment",
         "pay method", "mode of payment", "payment",
+    ],
+    "branch": [
+        "branch", "branch name", "location", "store", "store name", "outlet",
     ],
 }
 
@@ -435,11 +447,13 @@ def validate_and_convert_rows(
 
     Returns (valid_rows, row_errors):
     - valid_rows: list of dicts with keys matching Transaction's column
-      names exactly (date/product/quantity/selling_price/cost_price/
-      category/customer/payment_method), ready to be passed straight
-      into `Transaction(**row)` -- this is what keeps the import route
-      itself free of any per-field wiring, and what a future data source
-      (Google Sheets sync, POS sync) reuses unchanged.
+      names (date/product/quantity/selling_price/cost_price/category/
+      customer/payment_method), plus a `branch_name` key that is NOT a
+      real column -- it's a plain string for execute_confirmed_import to
+      resolve against this business's actual Branch rows (this function
+      has no DB access, so it can't do that resolution itself). Every
+      key except branch_name is ready to pass straight into
+      `Transaction(**row)`.
     - row_errors: list of {"row_number": int, "errors": [str, ...]},
       1-indexed against the data rows (not counting the header).
     """
@@ -508,6 +522,7 @@ def validate_and_convert_rows(
         converted["payment_method"] = _normalize_optional_text(
             raw_row, mapping, "payment_method", 100
         )
+        converted["branch_name"] = _normalize_optional_text(raw_row, mapping, "branch", 255)
 
         if errors:
             row_errors.append({"row_number": row_number, "errors": errors})
@@ -597,6 +612,7 @@ def execute_confirmed_import(db, import_session_id: str, mapping: dict) -> dict:
     # needing to worry about import order.
     import uuid as uuid_module
 
+    from app.models.branch import Branch
     from app.models.import_session import ImportSession
     from app.models.transaction import Transaction
 
@@ -607,6 +623,25 @@ def execute_confirmed_import(db, import_session_id: str, mapping: dict) -> dict:
     valid_rows, row_errors = validate_and_convert_rows(import_session.raw_rows, mapping)
 
     business_id_str = str(import_session.business_id)
+
+    # Resolve each row's branch_name (plain text from the sheet) against
+    # this business's actual branches, case-insensitively, once up front
+    # -- not a query per row. A name that doesn't match any existing
+    # branch is left unassigned (branch_id=None) rather than rejecting
+    # the row or silently creating a new branch on the business's
+    # behalf: an unrecognized name is far more often a typo than a
+    # genuinely new location, and a typo-created branch is exactly the
+    # kind of silent, hard-to-notice mess Settings' own branch list
+    # would then need manual cleanup for.
+    branches_by_name = {
+        name.lower(): branch_id
+        for branch_id, name in db.query(Branch.id, Branch.name).filter(
+            Branch.business_id == import_session.business_id
+        )
+    }
+    for row in valid_rows:
+        branch_name = row.pop("branch_name", None)
+        row["branch_id"] = branches_by_name.get(branch_name.lower()) if branch_name else None
 
     # Batch 11.3: same duplicate check as sheets_sync.sync_now -- computed
     # for every valid row up front so the "already exists" lookup is a
