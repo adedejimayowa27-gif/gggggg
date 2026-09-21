@@ -23,7 +23,9 @@
  *   really" doesn't require cross-referencing a date by hand.
  */
 import { useEffect, useState } from "react";
+import { useDashboard } from "@/context/DashboardContext";
 import { listAlerts, runAlertDetection, updateAlertStatus } from "@/lib/alerts";
+import { hasRole } from "@/lib/permissions";
 import type { AlertListItem, AlertStatus } from "@/types";
 import styles from "./AlertsPanel.module.css";
 
@@ -57,6 +59,11 @@ interface Props {
 }
 
 export default function AlertsPanel({ businessId, token, compact = false }: Props) {
+  // Batch 12.4: checking for alerts and changing an alert's status need the
+  // "member" role; a read-only viewer still sees every alert.
+  const { currentUserRole } = useDashboard();
+  const canManageAlerts = hasRole(currentUserRole, "member");
+
   const [alerts, setAlerts] = useState<AlertListItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<AlertStatus | "all">(compact ? "all" : "unread");
   const [isLoading, setIsLoading] = useState(false);
@@ -124,9 +131,11 @@ export default function AlertsPanel({ businessId, token, compact = false }: Prop
             </h2>
           </div>
         </div>
-        <button className={styles.runButton} onClick={handleRun} disabled={isRunning}>
-          {isRunning ? "Checking…" : "Check for alerts"}
-        </button>
+        {canManageAlerts && (
+          <button className={styles.runButton} onClick={handleRun} disabled={isRunning}>
+            {isRunning ? "Checking…" : "Check for alerts"}
+          </button>
+        )}
       </div>
 
       {!compact && (
@@ -187,29 +196,31 @@ export default function AlertsPanel({ businessId, token, compact = false }: Prop
                   </p>
                 )}
               </div>
-              <div className={styles.itemActions}>
-                {alert.status === "unread" && (
-                  <button className={styles.actionNeutral} onClick={() => handleStatusChange(alert.id, "read")}>
-                    Mark read
-                  </button>
-                )}
-                {alert.status !== "dismissed" && alert.status !== "resolved" && (
-                  <>
-                    <button
-                      className={styles.actionPositive}
-                      onClick={() => handleStatusChange(alert.id, "resolved")}
-                    >
-                      Resolve
+              {canManageAlerts && (
+                <div className={styles.itemActions}>
+                  {alert.status === "unread" && (
+                    <button className={styles.actionNeutral} onClick={() => handleStatusChange(alert.id, "read")}>
+                      Mark read
                     </button>
-                    <button
-                      className={styles.actionNeutral}
-                      onClick={() => handleStatusChange(alert.id, "dismissed")}
-                    >
-                      Dismiss
-                    </button>
-                  </>
-                )}
-              </div>
+                  )}
+                  {alert.status !== "dismissed" && alert.status !== "resolved" && (
+                    <>
+                      <button
+                        className={styles.actionPositive}
+                        onClick={() => handleStatusChange(alert.id, "resolved")}
+                      >
+                        Resolve
+                      </button>
+                      <button
+                        className={styles.actionNeutral}
+                        onClick={() => handleStatusChange(alert.id, "dismissed")}
+                      >
+                        Dismiss
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>
