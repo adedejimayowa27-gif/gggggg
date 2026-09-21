@@ -5,15 +5,19 @@ Nested under a specific business, same pattern as imports.py -- every
 route depends on get_owned_business, so there is no path to another
 business's transactions even if a user guesses an ID.
 """
+import csv
+import io
 import uuid
 from enum import Enum
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query as SAQuery, Session
 
 from app.api.deps import get_owned_business
 from app.db.session import get_db
+from app.models.branch import Branch
 from app.models.business import Business
 from app.models.transaction import Transaction
 from app.schemas.transaction import PaginatedTransactions, TransactionOut
@@ -21,6 +25,30 @@ from app.schemas.transaction import PaginatedTransactions, TransactionOut
 router = APIRouter(prefix="/businesses/{business_id}/transactions", tags=["transactions"])
 
 MAX_PAGE_SIZE = 200
+MAX_EXPORT_ROWS = 50_000
+
+
+def _apply_filters(query: SAQuery, q: str | None, branch_id: uuid.UUID | None) -> SAQuery:
+    """
+    Shared by list_transactions and export_transactions so "export what
+    I'm currently looking at" is guaranteed to mean the same thing as
+    what's on screen -- both routes filter identically because they
+    call this one function rather than keeping two copies of the same
+    OR/ilike block in sync by hand.
+    """
+    if q:
+        pattern = f"%{q}%"
+        query = query.filter(
+            or_(
+                Transaction.product.ilike(pattern),
+                Transaction.category.ilike(pattern),
+                Transaction.customer.ilike(pattern),
+                Transaction.payment_method.ilike(pattern),
+            )
+        )
+    if branch_id is not None:
+        query = query.filter(Transaction.branch_id == branch_id)
+    return query
 
 
 class LookupField(str, Enum):
@@ -75,6 +103,68 @@ def list_field_values(
     return [row[0] for row in rows if row[0]]
 
 
+@router.get("/export")
+def export_transactions(
+    q: str | None = Query(default=None, min_length=1, max_length=200),
+    branch_id: uuid.UUID | None = Query(default=None, description="Restrict to one branch."),
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """
+    Downloads every transaction matching the same q/branch_id filters as
+    list_transactions, as a CSV -- not paginated, since the entire point
+    of an export is "give me everything that matches", not one page at
+    a time. Capped at MAX_EXPORT_ROWS as a defensive limit against a
+    pathological one-off, not a real constraint for this product's
+    businesses; a genuinely bigger export would need actual streaming
+    query pagination rather than this cap.
+
+    Branch is exported by name, not raw ID -- an ID means nothing to
+    someone opening this in Excel, so branches for this business are
+    resolved to a name lookup once, up front, rather than once per row.
+    """
+    query = _apply_filters(
+        db.query(Transaction).filter(Transaction.business_id == business.id), q, branch_id
+    )
+    transactions = (
+        query.order_by(Transaction.date.desc(), Transaction.created_at.desc()).limit(MAX_EXPORT_ROWS).all()
+    )
+
+    branch_names = {
+        b.id: b.name for b in db.query(Branch).filter(Branch.business_id == business.id)
+    }
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        ["Date", "Product", "Quantity", "Selling Price", "Cost Price", "Category", "Customer", "Payment Method", "Branch"]
+    )
+    for t in transactions:
+        writer.writerow(
+            [
+                t.date.isoformat(),
+                t.product,
+                t.quantity,
+                t.selling_price,
+                t.cost_price if t.cost_price is not None else "",
+                t.category or "",
+                t.customer or "",
+                t.payment_method or "",
+                branch_names.get(t.branch_id, "") if t.branch_id else "",
+            ]
+        )
+    buffer.seek(0)
+
+    safe_business_name = "".join(c if c.isalnum() or c in "-_ " else "" for c in business.name).strip() or "business"
+    filename = f"{safe_business_name.replace(' ', '-')}-transactions.csv"
+
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("", response_model=PaginatedTransactions)
 def list_transactions(
     page: int = Query(default=1, ge=1),
@@ -93,21 +183,9 @@ def list_transactions(
     sort), not a second, differently-structured response the frontend
     has to handle separately.
     """
-    base_query = db.query(Transaction).filter(Transaction.business_id == business.id)
-
-    if q:
-        pattern = f"%{q}%"
-        base_query = base_query.filter(
-            or_(
-                Transaction.product.ilike(pattern),
-                Transaction.category.ilike(pattern),
-                Transaction.customer.ilike(pattern),
-                Transaction.payment_method.ilike(pattern),
-            )
-        )
-
-    if branch_id is not None:
-        base_query = base_query.filter(Transaction.branch_id == branch_id)
+    base_query = _apply_filters(
+        db.query(Transaction).filter(Transaction.business_id == business.id), q, branch_id
+    )
 
     total = base_query.count()
     items = (
