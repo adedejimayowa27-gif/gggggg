@@ -77,6 +77,15 @@ def get_owned_business(
     querying Business directly, so the ownership check can never be
     accidentally skipped.
 
+    Batch 12.4: because this lets ANY active team member through, including
+    a read-only "viewer", it is now strictly the gate for routes that only
+    read data (or run a calculation that saves nothing). Any route that
+    creates, changes, deletes or triggers something must depend on
+    require_business_role("member") or higher instead -- see the
+    "Roles and permissions" table in docs/API.md, and
+    tests/test_role_permissions.py, which fails if a route is added
+    without a declared minimum role.
+
     Batch 10.2: also allows an active TeamMember (any role) to pass --
     purely additive. The original owner_id check runs first and is
     completely unchanged, so nothing about who could already access a
@@ -150,7 +159,17 @@ def require_business_role(minimum_role: str):
     Raises the same NotFoundError (never a 403) as get_owned_business, for
     the same reason: a team member below the required role shouldn't be
     able to distinguish "you're not allowed" from "this doesn't exist".
+
+    Batch 12.4: an unknown role name now fails at import time. Previously a
+    typo such as require_business_role("admn") fell back to the lowest
+    privilege level and silently let everyone through. The chosen role is
+    also stored on the returned dependency as `minimum_role` so the
+    route-permission test can read it back without calling anything.
     """
+    if minimum_role not in ROLE_ORDER:
+        raise ValueError(
+            f"Unknown role {minimum_role!r}; expected one of {sorted(ROLE_ORDER, key=ROLE_ORDER.get)}."
+        )
 
     def _dependency(
         business_id: uuid.UUID,
@@ -162,11 +181,12 @@ def require_business_role(minimum_role: str):
             raise NotFoundError("Business not found.")
 
         role = get_business_role(business_id, db, current_user)
-        if role is None or ROLE_ORDER.get(role, -1) < ROLE_ORDER.get(minimum_role, 0):
+        if role is None or ROLE_ORDER.get(role, -1) < ROLE_ORDER[minimum_role]:
             raise NotFoundError("Business not found.")
         business_id_var.set(str(business.id))
         return business
 
+    _dependency.minimum_role = minimum_role  # read by tests/test_role_permissions.py
     return _dependency
 
 
