@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
-import type { PaginatedTransactions } from "@/types";
+import { listBranches } from "@/lib/branches";
+import type { Branch, PaginatedTransactions } from "@/types";
 import styles from "./TransactionsTable.module.css";
 
 interface Props {
@@ -75,25 +76,42 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
   const [isLoading, setIsLoading] = useState(true);
   const [searchInput, setSearchInput] = useState(initialQuery ?? "");
   const [activeQuery, setActiveQuery] = useState(initialQuery ?? "");
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchFilter, setBranchFilter] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    // Fetched once, not tied to any filter state -- the branch list
+    // itself doesn't change based on what's currently filtered.
+    listBranches(businessId, token)
+      .then(setBranches)
+      .catch(() => setBranches([]));
+  }, [businessId, token]);
 
   useEffect(() => {
     if (!token) return;
     setIsLoading(true);
     const queryParam = activeQuery ? `&q=${encodeURIComponent(activeQuery)}` : "";
+    const branchParam = branchFilter ? `&branch_id=${branchFilter}` : "";
     apiFetch<PaginatedTransactions>(
-      `/businesses/${businessId}/transactions?page=${page}&page_size=${PAGE_SIZE}${queryParam}`,
+      `/businesses/${businessId}/transactions?page=${page}&page_size=${PAGE_SIZE}${queryParam}${branchParam}`,
       { authToken: token }
     )
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setIsLoading(false));
-  }, [businessId, token, page, refreshSignal, activeQuery]);
+  }, [businessId, token, page, refreshSignal, activeQuery, branchFilter]);
 
   // Refreshing after a new import should show the latest data, not
   // whatever page the user happened to be on before.
   useEffect(() => {
     setPage(1);
   }, [refreshSignal]);
+
+  const handleBranchFilterChange = (value: string) => {
+    setPage(1);
+    setBranchFilter(value);
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,23 +125,46 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
     setPage(1);
   };
 
+  // Defined once and reused in both the empty-state and normal render
+  // paths below, rather than duplicating this markup -- the branch
+  // dropdown only appears at all when the business actually has
+  // branches, so a business that's never touched that feature sees no
+  // change here.
+  const filterBar = (
+    <form className={styles.searchRow} onSubmit={handleSearchSubmit}>
+      <input
+        type="search"
+        placeholder="Search by product, category, customer, payment method…"
+        value={searchInput}
+        onChange={(e) => setSearchInput(e.target.value)}
+        className={styles.searchInput}
+      />
+      {branches.length > 0 && (
+        <select
+          value={branchFilter}
+          onChange={(e) => handleBranchFilterChange(e.target.value)}
+          className={styles.branchSelect}
+        >
+          <option value="">All branches</option>
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {activeQuery && (
+        <button type="button" className={styles.clearButton} onClick={handleClearSearch}>
+          Clear
+        </button>
+      )}
+    </form>
+  );
+
   if (!isLoading && (!data || data.total === 0)) {
     return (
       <div>
-        <form className={styles.searchRow} onSubmit={handleSearchSubmit}>
-          <input
-            type="search"
-            placeholder="Search by product, category, customer, payment method…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className={styles.searchInput}
-          />
-          {activeQuery && (
-            <button type="button" className={styles.clearButton} onClick={handleClearSearch}>
-              Clear
-            </button>
-          )}
-        </form>
+        {filterBar}
         <div className={styles.empty}>
           {activeQuery ? (
             <>
@@ -145,20 +186,7 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
 
   return (
     <div className={styles.wrap}>
-      <form className={styles.searchRow} onSubmit={handleSearchSubmit}>
-        <input
-          type="search"
-          placeholder="Search by product, category, customer, payment method…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          className={styles.searchInput}
-        />
-        {activeQuery && (
-          <button type="button" className={styles.clearButton} onClick={handleClearSearch}>
-            Clear
-          </button>
-        )}
-      </form>
+      {filterBar}
       {activeQuery && data && (
         <p className={styles.resultCount}>
           {data.total} {data.total === 1 ? "result" : "results"} for &ldquo;{activeQuery}&rdquo;
