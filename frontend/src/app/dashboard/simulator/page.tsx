@@ -27,6 +27,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
 import { ApiError } from "@/lib/api";
+import { hasRole } from "@/lib/permissions";
 import {
   deleteSimulation,
   getSimulation,
@@ -126,7 +127,10 @@ function buildMetricRows(view: SimulationRunResult): MetricRow[] {
 
 export default function SimulatorPage() {
   const { token } = useAuth();
-  const { primaryBusiness, isLoadingBusinesses } = useDashboard();
+  const { primaryBusiness, isLoadingBusinesses, currentUserRole } = useDashboard();
+  // Batch 12.4: anyone on the team can run a what-if preview (it saves
+  // nothing), but saving and deleting scenarios needs the "member" role.
+  const canSaveSimulations = hasRole(currentUserRole, "member");
 
   const [scenarioType, setScenarioType] = useState<ScenarioType>("selling_price_change");
   const [scopeType, setScopeType] = useState<ScopeType>("business");
@@ -481,7 +485,7 @@ export default function SimulatorPage() {
             ))}
           </ul>
 
-          {preview && !selected && (
+          {preview && !selected && canSaveSimulations && (
             <div className={styles.saveRow}>
               <input
                 type="text"
@@ -493,6 +497,9 @@ export default function SimulatorPage() {
                 {isSaving ? "Saving…" : "Save"}
               </button>
             </div>
+          )}
+          {preview && !selected && currentUserRole !== null && !canSaveSimulations && (
+            <p style={{ color: "var(--muted)" }}>Your role can run simulations but not save them.</p>
           )}
           {saveError && <p className={styles.error}>{saveError}</p>}
         </div>
@@ -533,15 +540,17 @@ export default function SimulatorPage() {
                     </span>
                   </span>
                 </button>
-                <button
-                  className={`${styles.deleteButton} ${
-                    confirmDeleteId === s.id ? styles.deleteButtonConfirm : ""
-                  }`}
-                  onClick={() => handleDeleteClick(s.id)}
-                  aria-label={confirmDeleteId === s.id ? "Confirm delete" : "Delete"}
-                >
-                  {confirmDeleteId === s.id ? "Confirm?" : "×"}
-                </button>
+                {canSaveSimulations && (
+                  <button
+                    className={`${styles.deleteButton} ${
+                      confirmDeleteId === s.id ? styles.deleteButtonConfirm : ""
+                    }`}
+                    onClick={() => handleDeleteClick(s.id)}
+                    aria-label={confirmDeleteId === s.id ? "Confirm delete" : "Delete"}
+                  >
+                    {confirmDeleteId === s.id ? "Confirm?" : "×"}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
