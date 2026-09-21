@@ -22,6 +22,7 @@ class TransactionOut(BaseModel):
     category: str | None
     customer: str | None
     payment_method: str | None
+    branch_id: uuid.UUID | None
     created_at: datetime
 
 
