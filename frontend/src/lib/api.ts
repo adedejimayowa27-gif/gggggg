@@ -52,3 +52,36 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const text = await response.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }
+
+/**
+ * Like apiFetch, but for endpoints that return a file (CSV export, any
+ * future PDF/XLSX export) rather than JSON -- apiFetch always calls
+ * response.json() on success, which would throw on a real file body.
+ * Same auth/error handling, different success path.
+ */
+export async function apiFetchBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+  const { authToken, headers, ...rest } = options;
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...rest,
+    headers: {
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...headers,
+    },
+  });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    let code: string | undefined;
+    try {
+      const body = await response.json();
+      message = body?.error?.message ?? message;
+      code = body?.error?.code;
+    } catch {
+      // response had no JSON body; keep default message
+    }
+    throw new ApiError(message, response.status, code);
+  }
+
+  return response.blob();
+}
