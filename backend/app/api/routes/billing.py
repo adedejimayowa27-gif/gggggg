@@ -9,7 +9,7 @@ see app.services.billing.
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_owned_business
+from app.api.deps import get_current_user, get_owned_business, require_business_role
 from app.core.exceptions import NotFoundError
 from app.db.session import get_db
 from app.models.business import Business
@@ -43,7 +43,7 @@ def start_checkout(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     plan = db.query(Plan).filter(Plan.key == payload.plan_key, Plan.is_active.is_(True)).first()
     if not plan:
