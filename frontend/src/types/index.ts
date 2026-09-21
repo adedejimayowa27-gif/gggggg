@@ -30,6 +30,7 @@ export const STANDARD_FIELDS = [
   "category",
   "customer",
   "payment_method",
+  "branch",
 ] as const;
 
 export type StandardField = (typeof STANDARD_FIELDS)[number];
@@ -83,6 +84,7 @@ export interface Transaction {
   category: string | null;
   customer: string | null;
   payment_method: string | null;
+  branch_id: string | null;
   created_at: string;
 }
 
