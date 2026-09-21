@@ -35,6 +35,20 @@
   cursor: pointer;
 }
 
+.branchSelect {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--paper);
+  font-size: 0.85rem;
+}
+
+.branchSelect:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
 .clearButton:hover {
   color: var(--paper);
   border-color: var(--surface-active);
