@@ -34,7 +34,7 @@ def _clear_other_defaults(db: Session, business_id, exclude_id=None) -> None:
 def create_branch(
     payload: BranchCreate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     check_max_branches(db, business)
 
@@ -73,7 +73,7 @@ def update_branch(
     branch_id: uuid.UUID,
     payload: BranchUpdate,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     branch = get_owned_branch(branch_id, business, db)
     if payload.name is not None:
