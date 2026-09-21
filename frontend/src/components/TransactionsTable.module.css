@@ -49,6 +49,33 @@
   border-color: var(--gold);
 }
 
+.exportButton {
+  padding: 0.55rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--gold);
+  color: #14151a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.exportButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.exportButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.exportError {
+  color: var(--clay);
+  font-size: 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
 .clearButton:hover {
   color: var(--paper);
   border-color: var(--surface-active);
