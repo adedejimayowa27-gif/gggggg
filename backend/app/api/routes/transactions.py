@@ -5,6 +5,7 @@ Nested under a specific business, same pattern as imports.py -- every
 route depends on get_owned_business, so there is no path to another
 business's transactions even if a user guesses an ID.
 """
+import uuid
 from enum import Enum
 
 from fastapi import APIRouter, Depends, Query
@@ -79,6 +80,7 @@ def list_transactions(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
     q: str | None = Query(default=None, min_length=1, max_length=200),
+    branch_id: uuid.UUID | None = Query(default=None, description="Restrict to one branch."),
     db: Session = Depends(get_db),
     business: Business = Depends(get_owned_business),
 ):
@@ -103,6 +105,9 @@ def list_transactions(
                 Transaction.payment_method.ilike(pattern),
             )
         )
+
+    if branch_id is not None:
+        base_query = base_query.filter(Transaction.branch_id == branch_id)
 
     total = base_query.count()
     items = (
