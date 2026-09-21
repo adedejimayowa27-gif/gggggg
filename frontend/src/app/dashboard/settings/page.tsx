@@ -61,8 +61,15 @@ const FIELD_LABELS: Record<StandardField, string> = {
   category: "Category",
   customer: "Customer",
   payment_method: "Payment Method",
+  branch: "Branch",
 };
-const OPTIONAL_FIELDS: StandardField[] = ["cost_price", "category", "customer", "payment_method"];
+const OPTIONAL_FIELDS: StandardField[] = [
+  "cost_price",
+  "category",
+  "customer",
+  "payment_method",
+  "branch",
+];
 
 function SettingsPageContent() {
   const { token } = useAuth();
