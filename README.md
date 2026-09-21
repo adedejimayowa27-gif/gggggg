@@ -163,6 +163,10 @@ automatically on first run, so your dev data is never touched. See
   all other routes.
 - Every business-scoped endpoint authorizes the caller against the business on
   every request; unauthorized access returns `404`, not `403`.
+- Role-based access on every business route: Viewers are read-only, Members do
+  day-to-day work, Admins manage integrations and the team (see the table in
+  [docs/API.md](docs/API.md)). A test fails if a route is added without a
+  declared role or a write route is left open to Viewers.
 - Google / Microsoft connections are read-only and their tokens are encrypted
   at rest.
 - Audit log of sign-ins, team changes, integrations and billing actions.
@@ -193,8 +197,6 @@ See [docs/API.md](docs/API.md) for the full conventions.
 ## Known limitations
 
 - Logout is client-side only and there is no refresh-token flow yet.
-- Role checks are enforced on admin-level actions (team, integrations,
-  branch deletion); other routes are open to any active team member.
 - No account or business deletion endpoint yet (see the retention notes in
   `docs/BACKUP_RECOVERY.md`).
 - No inventory tracking, so the stock-shortage alert never fires.
