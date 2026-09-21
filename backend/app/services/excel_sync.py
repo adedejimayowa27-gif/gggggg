@@ -95,6 +95,20 @@ def sync_now(db: Session, business: Business, integration: MicrosoftIntegration)
 
     business_id_str = str(business.id)
 
+    # Same branch_name -> branch_id resolution as
+    # import_pipeline.execute_confirmed_import -- see that function's
+    # comment for why an unmatched name is left unassigned rather than
+    # rejected or auto-created.
+    from app.models.branch import Branch
+
+    branches_by_name = {
+        name.lower(): branch_id
+        for branch_id, name in db.query(Branch.id, Branch.name).filter(Branch.business_id == business.id)
+    }
+    for row in valid_rows:
+        branch_name = row.pop("branch_name", None)
+        row["branch_id"] = branches_by_name.get(branch_name.lower()) if branch_name else None
+
     # Same duplicate check as sheets_sync.sync_now and (since Batch 11.3)
     # the file-upload path -- all three now share this exact pattern.
     fingerprints = [compute_fingerprint(business_id_str, row) for row in valid_rows]
