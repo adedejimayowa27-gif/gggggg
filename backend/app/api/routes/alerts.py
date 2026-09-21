@@ -11,7 +11,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_owned_alert, get_owned_business
+from app.api.deps import get_owned_alert, get_owned_business, require_business_role
 from app.db.session import get_db
 from app.models.alert import Alert
 from app.models.business import Business
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/businesses/{business_id}/alerts", tags=["alerts"])
 @router.post("/run", response_model=list[AlertOut])
 def run_alert_detection(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     """Run every registered detector now; returns only newly-created alerts (duplicates are skipped)."""
     created = run_all_detectors(db, business)
@@ -65,7 +65,7 @@ def update_alert_status(
     alert_id: uuid.UUID,
     payload: AlertStatusUpdateIn,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     """Mark read/unread, dismiss, or resolve (requirement #6)."""
     alert = get_owned_alert(alert_id, business, db)
