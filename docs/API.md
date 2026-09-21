@@ -45,6 +45,35 @@ so an unauthorized caller can't even confirm the business exists). See
 `app/api/deps.py`'s `get_owned_business`/`require_business_role` for the
 implementation every route depends on.
 
+## Roles and permissions
+
+Every team member has one role on a business. Each role includes everything
+the roles below it can do. A request from someone without a high enough role
+gets the same `404 Business not found.` as a non-member (see above), so the
+response never reveals what exists.
+
+| Role | Can do |
+|---|---|
+| **Viewer** | Read everything the business shows: dashboard, analytics, transactions (including CSV export), alerts, import history, saved simulations, branches, the team list, subscription and integration status. Also use tools that change nothing: the what-if preview (`POST /simulate`), the AI assistant and chat history. |
+| **Member** | Everyday work: upload and confirm imports, run Google Sheets / Excel syncs, run alert detection and mark alerts read/resolved/dismissed, save and delete simulations, add and edit branches. |
+| **Admin** | Set up and manage: connect, configure and disconnect Google Sheets and Excel/OneDrive (including choosing the file and mapping columns), invite / change / remove team members, delete branches, read the audit log, start a plan upgrade (`POST .../billing/checkout`). |
+| **Owner** | Everything an admin can. The business's creator; the owner role can't be assigned, changed or removed. Nothing is owner-only yet. |
+
+Why integration setup is admin-only: listing spreadsheets or workbooks
+shows the file names in the connected Google/Microsoft account, and choosing
+the file and column mapping decides what data flows into the business.
+
+The OAuth redirects (`GET /google/callback`, `GET /microsoft/callback`) sit
+outside `/businesses/{business_id}/...` because the providers send the
+browser there without an Authorization header. They are authenticated by the
+signed `state` value that only an admin's `/connect` call can generate.
+
+**This table is enforced by a test.** `backend/tests/test_role_permissions.py`
+holds the same table and fails if a business route has no declared role, if a
+route enforces a different role than the table says, or if a
+POST/PUT/PATCH/DELETE route is reachable by a Viewer without being
+deliberately allow-listed. Adding an endpoint means adding its row there.
+
 ## Error responses
 
 Every error response (validation, not-found, rate-limited, unexpected
@@ -114,7 +143,9 @@ version: a business must never be able to access another business's
 data, and that's enforced at every layer (database FKs, backend query
 scoping, the `get_owned_business`/`require_business_role` dependency
 chain, and mirrored -- never solely relied upon -- in the frontend). If
-you're adding a new endpoint: it must depend on `get_owned_business` (or
-`require_business_role` if it needs a minimum team role) and every query
-inside it must filter by that business's id. There is no exception to
-this.
+you're adding a new endpoint: a route that only reads data depends on
+`get_owned_business` (any active team member, including Viewers); a route
+that creates, changes, deletes or triggers anything depends on
+`require_business_role("member")` or higher (see "Roles and permissions"
+above). Every query inside it must filter by that business's id. There is
+no exception to this.
