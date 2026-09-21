@@ -10,13 +10,17 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDashboard } from "@/context/DashboardContext";
+import { hasRole } from "@/lib/permissions";
 import TransactionImportWizard from "@/components/TransactionImportWizard";
 import TransactionsTable from "@/components/TransactionsTable";
 import ImportHistoryList from "@/components/ImportHistoryList";
 import styles from "./transactions.module.css";
 
 function TransactionsPageContent() {
-  const { primaryBusiness, isLoadingBusinesses } = useDashboard();
+  const { primaryBusiness, isLoadingBusinesses, currentUserRole } = useDashboard();
+  // Batch 12.4: importing needs the "member" role; viewers can still browse
+  // every transaction and the import history.
+  const canImport = hasRole(currentUserRole, "member");
   const [refreshSignal, setRefreshSignal] = useState(0);
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q") ?? undefined;
@@ -40,10 +44,18 @@ function TransactionsPageContent() {
     <div className={styles.page}>
       <div>
         <h1 className={styles.title}>Transactions</h1>
-        <TransactionImportWizard
-          businessId={primaryBusiness.id}
-          onImportComplete={() => setRefreshSignal((s) => s + 1)}
-        />
+        {canImport ? (
+          <TransactionImportWizard
+            businessId={primaryBusiness.id}
+            onImportComplete={() => setRefreshSignal((s) => s + 1)}
+          />
+        ) : (
+          currentUserRole !== null && (
+            <p className={styles.muted}>
+              Your role can view transactions but not import them. Ask an admin if you need to add data.
+            </p>
+          )
+        )}
       </div>
 
       <div>
