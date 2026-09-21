@@ -11,7 +11,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_owned_business
+from app.api.deps import get_current_user, get_owned_business, require_business_role
 from app.core.exceptions import AppError, NotFoundError
 from app.db.session import get_db
 from app.models.business import Business
@@ -53,7 +53,7 @@ def _get_owned_import_session(
 async def upload_import_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     # Bounded read -- caps how much this handler ever holds in memory
     # regardless of how large the actual uploaded file is, rather than
@@ -100,7 +100,7 @@ def confirm_import(
     payload: ImportConfirmIn,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     """
     Batch 10.9: the actual row-by-row validation and insertion no longer
