@@ -86,7 +86,7 @@ def connect_google(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     log_action(
         db, "google_integration.connect_initiated", business_id=business.id, actor_user_id=current_user.id,
@@ -155,7 +155,7 @@ def disconnect_google(
 @router.get("/spreadsheets", response_model=list[SpreadsheetOut])
 def get_spreadsheets(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """Spreadsheets the connected Google account can see, for the user to pick from."""
     integration = get_connected_google_integration(business, db)
@@ -167,7 +167,7 @@ def get_spreadsheets(
 def get_worksheets(
     spreadsheet_id: str,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """Worksheet (tab) titles within one chosen spreadsheet."""
     integration = get_connected_google_integration(business, db)
@@ -179,7 +179,7 @@ def get_worksheets(
 def set_selection(
     payload: SelectionIn,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """
     Saves which spreadsheet + worksheet this business will sync from.
@@ -202,7 +202,7 @@ def set_selection(
 @router.get("/preview", response_model=SheetPreviewOut)
 def get_sheet_preview(
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """
     Reads the currently-selected worksheet right now and suggests a
@@ -223,7 +223,7 @@ def get_sheet_preview(
 def set_mapping(
     payload: MappingIn,
     db: Session = Depends(get_db),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("admin")),
 ):
     """Saves the confirmed column mapping -- every future 'Sync Now' reuses this automatically."""
     integration = get_connected_google_integration(business, db)
@@ -236,7 +236,7 @@ def run_sync(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    business: Business = Depends(get_owned_business),
+    business: Business = Depends(require_business_role("member")),
 ):
     """
     'Sync Now' (requirement #9): re-reads the sheet, validates every row
