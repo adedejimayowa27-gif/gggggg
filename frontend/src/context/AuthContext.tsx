@@ -29,6 +29,10 @@ interface AuthContextValue {
   signup: (email: string, password: string, fullName?: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Batch 12.2: re-fetches /auth/me, e.g. right after the user confirms
+   * their email on the verify-email page, so the banner clears without
+   * needing a full page reload. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -93,8 +97,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/login");
   }, [token, router]);
 
+  const refreshUser = useCallback(async () => {
+    if (!token) return;
+    try {
+      const currentUser = await apiFetch<User>("/auth/me", { authToken: token });
+      setUser(currentUser);
+    } catch {
+      // A stale/expired token here is already handled the next time any
+      // other authenticated call fails; this refresh is best-effort.
+    }
+  }, [token]);
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, signup, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, signup, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
