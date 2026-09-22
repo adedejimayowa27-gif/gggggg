@@ -32,3 +32,8 @@ class TeamMemberOut(BaseModel):
     role: TeamRole
     status: str
     created_at: datetime
+    # Only meaningful on the response to POST (a fresh invite); None on
+    # every other read (GET list, PATCH role update) where no email was
+    # sent as part of that request, and no email-send history is
+    # persisted. See app/services/team.py's invite_member.
+    email_sent: bool | None = None
