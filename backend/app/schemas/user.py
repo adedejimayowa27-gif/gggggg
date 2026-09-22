@@ -30,6 +30,7 @@ class UserOut(BaseModel):
     email: EmailStr
     full_name: str | None
     is_active: bool
+    is_email_verified: bool
     created_at: datetime
 
 
@@ -46,3 +47,11 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
