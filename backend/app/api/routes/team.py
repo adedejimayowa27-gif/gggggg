@@ -49,7 +49,7 @@ def invite_team_member(
     log_action(
         db, "team_member.invited", business_id=business.id, actor_user_id=current_user.id,
         target_type="team_member", target_id=str(member.id),
-        details={"email": member.invited_email, "role": member.role},
+        details={"email": member.invited_email, "role": member.role, "email_sent": member.email_sent},
         ip_address=client_ip(request),
     )
     return TeamMemberOut.model_validate(member)
