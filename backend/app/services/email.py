@@ -95,6 +95,26 @@ def render_password_reset_email(reset_url: str) -> tuple[str, str]:
     return subject, _base_template("Reset your password", body)
 
 
+def render_verification_email(verify_url: str) -> tuple[str, str]:
+    """Returns (subject, html) for a "confirm your email" message, sent at signup and on request via /auth/resend-verification."""
+    subject = "Confirm your BizIntel email address"
+    body = f"""
+      <p style="font-size: 14px; line-height: 1.6;">
+        Thanks for signing up for BizIntel. Please confirm this is your email address.
+        This link expires in {settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES // 60} hours.
+      </p>
+      <p style="margin: 24px 0;">
+        <a href="{verify_url}" style="background: #ffd60a; color: #14151a; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block;">
+          Confirm email address
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #666666; line-height: 1.6;">
+        If you didn't create a BizIntel account, you can safely ignore this email.
+      </p>
+    """
+    return subject, _base_template("Confirm your email", body)
+
+
 def render_team_invite_email(business_name: str, inviter_email: str, signup_url: str) -> tuple[str, str]:
     """
     Returns (subject, html) for a team invite email.
