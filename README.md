@@ -159,6 +159,9 @@ automatically on first run, so your dev data is never touched. See
 
 - Passwords hashed with bcrypt; time-limited JWT access tokens; short-lived,
   purpose-bound password-reset tokens; no account enumeration on reset.
+- Email verification: every new signup gets a confirmation link (valid ~24h),
+  with a resend option and a dashboard banner until confirmed. Informational
+  only -- an unverified account can use the app fully.
 - Rate limiting on sign-up, login and password reset, plus a default limit on
   all other routes.
 - Every business-scoped endpoint authorizes the caller against the business on
