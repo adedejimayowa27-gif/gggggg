@@ -5,6 +5,8 @@ Kept isolated from route/business logic so auth mechanics can evolve
 (e.g. swapping bcrypt rounds, adding refresh tokens) without touching
 API code.
 """
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -69,6 +71,29 @@ def decode_password_reset_token(token: str) -> Optional[str]:
         return payload.get("sub")
     except JWTError:
         return None
+
+
+def generate_refresh_token() -> tuple[str, str]:
+    """
+    Returns (raw_token, token_hash). The raw token is returned to the
+    client exactly once (in the login/signup/refresh response body) and
+    never stored anywhere; only its SHA-256 hash is persisted
+    (app.models.refresh_token.RefreshToken.token_hash), so a database
+    leak alone can't be used to impersonate a session. secrets.token_urlsafe
+    (not jwt.encode) on purpose: this token carries no claims of its own --
+    it's just a high-entropy lookup key into that table, where expiry and
+    revocation actually live.
+    """
+    raw_token = secrets.token_urlsafe(64)
+    return raw_token, hash_refresh_token(raw_token)
+
+
+def hash_refresh_token(raw_token: str) -> str:
+    """The lookup key stored in refresh_tokens.token_hash. Deterministic
+    (unlike bcrypt) on purpose -- a refresh/logout call needs to find the
+    matching row with an indexed equality lookup, not by re-hashing and
+    comparing against every stored hash."""
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
 def create_email_verification_token(user_id: str) -> str:
