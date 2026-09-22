@@ -69,3 +69,27 @@ def decode_password_reset_token(token: str) -> Optional[str]:
         return payload.get("sub")
     except JWTError:
         return None
+
+
+def create_email_verification_token(user_id: str) -> str:
+    """
+    Same shape as create_password_reset_token above (a distinct
+    "purpose" claim, signed with the same SECRET_KEY, so the two token
+    kinds can never be swapped for each other), but with its own much
+    longer expiry -- see EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES's
+    comment in app/core/config.py for why.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES)
+    to_encode: dict[str, Any] = {"sub": user_id, "exp": expire, "purpose": "email_verification"}
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_email_verification_token(token: str) -> Optional[str]:
+    """Returns the user id if the token is valid AND was issued for email verification, else None."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("purpose") != "email_verification":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
