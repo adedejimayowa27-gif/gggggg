@@ -50,6 +50,17 @@ def send_email(to: str, subject: str, html: str) -> bool:
         )
         response.raise_for_status()
         return True
+    except httpx.HTTPStatusError as exc:
+        # Log the response body, not just the exception -- Resend puts the
+        # actual reason (e.g. "You can only send testing emails to your own
+        # email address" for an unverified sending domain) in the JSON body,
+        # which str(exc) doesn't include. Without this, a recipient-address
+        # rejection and a bad API key look identical in the logs.
+        logger.error(
+            "Failed to send email %r to %s: %s -- response body: %s",
+            subject, to, exc, exc.response.text,
+        )
+        return False
     except httpx.HTTPError as exc:
         logger.error("Failed to send email %r to %s: %s", subject, to, exc)
         return False
