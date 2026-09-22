@@ -9,6 +9,9 @@ export interface User {
 
 export interface AuthResponse {
   access_token: string;
+  // Batch 12.3: an opaque, revocable session token. Store it alongside
+  // access_token and send it to POST /auth/refresh or POST /auth/logout.
+  refresh_token: string;
   token_type: string;
   user: User;
 }
