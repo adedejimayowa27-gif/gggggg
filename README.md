@@ -157,8 +157,13 @@ automatically on first run, so your dev data is never touched. See
 
 ## Security overview
 
-- Passwords hashed with bcrypt; time-limited JWT access tokens; short-lived,
-  purpose-bound password-reset tokens; no account enumeration on reset.
+- Passwords hashed with bcrypt. Two-token sessions: a short-lived (15 min)
+  JWT access token plus a long-lived, revocable, hashed-at-rest refresh
+  token that rotates on every use, with reuse detection (a stolen/replayed
+  refresh token revokes the whole session). Logout and a password reset
+  both revoke sessions server-side. Short-lived, purpose-bound
+  password-reset and email-verification tokens; no account enumeration on
+  reset or resend.
 - Email verification: every new signup gets a confirmation link (valid ~24h),
   with a resend option and a dashboard banner until confirmed. Informational
   only -- an unverified account can use the app fully.
@@ -199,7 +204,6 @@ See [docs/API.md](docs/API.md) for the full conventions.
 
 ## Known limitations
 
-- Logout is client-side only and there is no refresh-token flow yet.
 - No account or business deletion endpoint yet (see the retention notes in
   `docs/BACKUP_RECOVERY.md`).
 - No inventory tracking, so the stock-shortage alert never fires.
