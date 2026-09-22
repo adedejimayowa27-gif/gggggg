@@ -6,6 +6,17 @@ Auth is stateless JWT-based for this step:
 - logout is a client-side action (discard the token); the endpoint exists
   for a consistent API shape and to leave room for future server-side
   token revocation (e.g. a blacklist table) without breaking the contract.
+
+Email verification (Step 12, Batch 12.2): tracked, not enforced. An
+unverified user can log in and use every feature exactly as before --
+this batch only adds a flag, a dismissible frontend banner, and a way to
+confirm the address. The alternative (blocking access until verified)
+would double as an access-control feature and needs its own design
+decisions (which routes stay open so a legitimately-locked-out person can
+still get the verification email re-sent, what happens to existing
+unverified accounts, etc.) -- deliberately out of scope here so as not to
+lock anyone out as a side effect of this batch. Batch 12.3 revisits this
+once real sessions exist.
 """
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
@@ -15,7 +26,9 @@ from app.core.exceptions import ConflictError, UnauthorizedError, ValidationErro
 from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
+    create_email_verification_token,
     create_password_reset_token,
+    decode_email_verification_token,
     decode_password_reset_token,
     hash_password,
     verify_password,
@@ -23,9 +36,18 @@ from app.core.security import (
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import ForgotPasswordRequest, ResetPasswordRequest, Token, UserCreate, UserLogin, UserOut
+from app.schemas.user import (
+    ForgotPasswordRequest,
+    ResendVerificationRequest,
+    ResetPasswordRequest,
+    Token,
+    UserCreate,
+    UserLogin,
+    UserOut,
+    VerifyEmailRequest,
+)
 from app.services.audit import client_ip, log_action
-from app.services.email import render_password_reset_email, send_email
+from app.services.email import render_password_reset_email, render_verification_email, send_email
 from app.services.team import link_pending_invites
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -57,8 +79,21 @@ def signup(payload: UserCreate, request: Request, db: Session = Depends(get_db))
         details={"email": user.email}, ip_address=client_ip(request),
     )
 
+    # Batch 12.2: best-effort, same as every other email this app sends --
+    # send_email logs and returns False on any failure (missing config,
+    # Resend down) rather than raising, so signup itself never fails
+    # because of the verification email.
+    _send_verification_email(user)
+
     token = create_access_token(subject=str(user.id))
     return Token(access_token=token, user=UserOut.model_validate(user))
+
+
+def _send_verification_email(user: User) -> None:
+    verify_token = create_email_verification_token(str(user.id))
+    verify_url = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
+    subject, html = render_verification_email(verify_url)
+    send_email(user.email, subject, html)
 
 
 @router.post("/login", response_model=Token)
@@ -144,3 +179,44 @@ def reset_password(payload: ResetPasswordRequest, request: Request, db: Session 
     )
 
     return {"message": "Password updated. You can now log in with your new password."}
+
+
+@router.post("/verify-email", status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
+def verify_email(payload: VerifyEmailRequest, request: Request, db: Session = Depends(get_db)):
+    user_id = decode_email_verification_token(payload.token)
+    if not user_id:
+        raise ValidationError("This verification link is invalid or has expired.")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValidationError("This verification link is invalid or has expired.")
+
+    if not user.is_email_verified:
+        user.is_email_verified = True
+        db.commit()
+        log_action(
+            db, "auth.email_verified", actor_user_id=user.id,
+            target_type="user", target_id=str(user.id), ip_address=client_ip(request),
+        )
+
+    return {"message": "Email address confirmed."}
+
+
+@router.post("/resend-verification", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
+def resend_verification(payload: ResendVerificationRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Same account-enumeration defense as /forgot-password above: always
+    the same generic response, and the email only actually goes out when
+    a matching, active, not-yet-verified account exists.
+    """
+    user = db.query(User).filter(User.email == payload.email).first()
+    if user and user.is_active and not user.is_email_verified:
+        _send_verification_email(user)
+        log_action(
+            db, "auth.verification_resent", actor_user_id=user.id,
+            target_type="user", target_id=str(user.id), ip_address=client_ip(request),
+        )
+
+    return {"message": "If an unverified account exists for that email, a confirmation link has been sent."}
