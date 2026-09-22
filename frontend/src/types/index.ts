@@ -452,6 +452,11 @@ export interface TeamMember {
   role: TeamRole;
   status: string;
   created_at: string;
+  // Only present on the response to inviteTeamMember (a fresh invite);
+  // null on every other read. False means the invite was created but the
+  // email failed to send -- share the signup link with the invitee
+  // directly. See backend/app/schemas/team.py.
+  email_sent: boolean | null;
 }
 
 // --- Billing -------------------------------------------------------------
