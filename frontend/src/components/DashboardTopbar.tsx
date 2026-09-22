@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
@@ -184,6 +185,14 @@ export default function DashboardTopbar({ onMenuToggle }: Props) {
           {isUserMenuOpen && (
             <div className={styles.dropdown}>
               <p className={styles.userEmailInMenu}>{user?.email}</p>
+              <Link
+                href="/dashboard/account"
+                className={styles.logoutButton}
+                style={{ display: "block" }}
+                onClick={() => setIsUserMenuOpen(false)}
+              >
+                Account
+              </Link>
               <button className={styles.logoutButton} onClick={() => logout()}>
                 Log out
               </button>
