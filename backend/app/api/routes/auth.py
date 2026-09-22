@@ -1,11 +1,18 @@
 """
 Authentication routes.
 
-Auth is stateless JWT-based for this step:
-- signup/login both return a bearer token.
-- logout is a client-side action (discard the token); the endpoint exists
-  for a consistent API shape and to leave room for future server-side
-  token revocation (e.g. a blacklist table) without breaking the contract.
+Two-token auth (Step 12, Batch 12.3):
+- signup/login/refresh all return an access_token (short-lived, stateless
+  JWT -- app.core.security.create_access_token) AND a refresh_token
+  (long-lived, revocable, stored hashed -- app.models.refresh_token).
+- POST /auth/refresh exchanges a refresh token for a new pair, rotating
+  the refresh token each time; POST /auth/logout revokes it for real.
+- A password reset revokes every refresh token for that account (see
+  reset_password below), so a compromised session can't outlive the
+  password that was reset because of it.
+Before this batch, auth was pure stateless JWT with no server-side way
+to end a session early; see app/models/refresh_token.py for the full
+design rationale.
 
 Email verification (Step 12, Batch 12.2): tracked, not enforced. An
 unverified user can log in and use every feature exactly as before --
@@ -15,9 +22,13 @@ would double as an access-control feature and needs its own design
 decisions (which routes stay open so a legitimately-locked-out person can
 still get the verification email re-sent, what happens to existing
 unverified accounts, etc.) -- deliberately out of scope here so as not to
-lock anyone out as a side effect of this batch. Batch 12.3 revisits this
-once real sessions exist.
+lock anyone out as a side effect of this batch. Still not enforced as of
+Batch 12.3 (sessions) below -- if it's ever added, it belongs in
+get_current_user (app/api/deps.py), not here.
 """
+import uuid
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
@@ -30,14 +41,18 @@ from app.core.security import (
     create_password_reset_token,
     decode_email_verification_token,
     decode_password_reset_token,
+    generate_refresh_token,
     hash_password,
+    hash_refresh_token,
     verify_password,
 )
 from app.core.config import settings
 from app.db.session import get_db
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.user import (
     ForgotPasswordRequest,
+    RefreshTokenRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
     Token,
@@ -85,8 +100,7 @@ def signup(payload: UserCreate, request: Request, db: Session = Depends(get_db))
     # because of the verification email.
     _send_verification_email(user)
 
-    token = create_access_token(subject=str(user.id))
-    return Token(access_token=token, user=UserOut.model_validate(user))
+    return _issue_tokens(db, user)
 
 
 def _send_verification_email(user: User) -> None:
@@ -94,6 +108,43 @@ def _send_verification_email(user: User) -> None:
     verify_url = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
     subject, html = render_verification_email(verify_url)
     send_email(user.email, subject, html)
+
+
+def _issue_tokens(db: Session, user: User, family_id: uuid.UUID | None = None) -> Token:
+    """
+    Creates a new access token (stateless, short-lived) and a new
+    refresh-token row (stateful, revocable -- see
+    app/models/refresh_token.py), and returns both in the shape the
+    client stores.
+
+    `family_id` is only passed by /auth/refresh, continuing an existing
+    rotation chain; signup/login omit it, starting a brand-new family
+    (this new token's own id becomes the family_id, exactly matching
+    the pattern flush()-ing once and using the generated id).
+    """
+    access_token = create_access_token(subject=str(user.id))
+    raw_refresh_token, token_hash = generate_refresh_token()
+
+    refresh_token_row = RefreshToken(
+        user_id=user.id,
+        token_hash=token_hash,
+        family_id=family_id or uuid.uuid4(),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+    # A brand-new family uses this row's own id as family_id, so the
+    # family always exists even for a session that's never been
+    # refreshed. Needs an id up front, hence flush() before using it --
+    # cheaper than a second query, and everything here commits together
+    # in one transaction regardless.
+    if family_id is None:
+        db.add(refresh_token_row)
+        db.flush()
+        refresh_token_row.family_id = refresh_token_row.id
+    else:
+        db.add(refresh_token_row)
+    db.commit()
+
+    return Token(access_token=access_token, refresh_token=raw_refresh_token, user=UserOut.model_validate(user))
 
 
 @router.post("/login", response_model=Token)
@@ -117,15 +168,93 @@ def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)):
         target_type="user", target_id=str(user.id), ip_address=client_ip(request),
     )
 
-    token = create_access_token(subject=str(user.id))
-    return Token(access_token=token, user=UserOut.model_validate(user))
+    return _issue_tokens(db, user)
+
+
+@router.post("/refresh", response_model=Token)
+@limiter.limit("30/minute")
+def refresh(payload: RefreshTokenRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Exchanges a refresh token for a new access token AND a new refresh
+    token (rotation -- see app/models/refresh_token.py's module
+    docstring). The old refresh token is revoked in the same call, so
+    it can never be used again.
+
+    Reuse detection: if the presented token matches a row that's
+    already revoked, that's not a normal "expired, log in again" case --
+    a legitimate client only ever holds the single newest token in its
+    family, so a *revoked* token being replayed means it was copied
+    somewhere (a stolen token, a client that crashed mid-rotation and
+    retried with a token it no longer should have, etc.). Rather than
+    guess which, every token in that family is revoked, which forces a
+    real re-login and cuts off whoever else is holding a copy.
+    """
+    token_hash = hash_refresh_token(payload.refresh_token)
+    token_row = db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
+
+    if not token_row:
+        raise UnauthorizedError("This session is no longer valid. Please log in again.")
+
+    if token_row.revoked_at is not None:
+        db.query(RefreshToken).filter(
+            RefreshToken.family_id == token_row.family_id, RefreshToken.revoked_at.is_(None)
+        ).update({"revoked_at": datetime.now(timezone.utc), "revoked_reason": "reuse_detected"})
+        db.commit()
+        log_action(
+            db, "auth.refresh_reuse_detected", actor_user_id=token_row.user_id,
+            target_type="user", target_id=str(token_row.user_id), ip_address=client_ip(request),
+        )
+        raise UnauthorizedError("This session is no longer valid. Please log in again.")
+
+    if token_row.expires_at < datetime.now(timezone.utc):
+        raise UnauthorizedError("This session is no longer valid. Please log in again.")
+
+    user = db.query(User).filter(User.id == token_row.user_id).first()
+    if not user or not user.is_active:
+        raise UnauthorizedError("This session is no longer valid. Please log in again.")
+
+    token_row.revoked_at = datetime.now(timezone.utc)
+    token_row.revoked_reason = "rotated"
+    db.commit()
+
+    return _issue_tokens(db, user, family_id=token_row.family_id)
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
-def logout(current_user: User = Depends(get_current_user)):
-    # Stateless JWT: nothing to invalidate server-side yet. The client is
-    # responsible for discarding the token. Requiring a valid token here
-    # ensures the endpoint can't be spammed by unauthenticated clients.
+def logout(
+    payload: RefreshTokenRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Batch 12.3: now revokes the refresh token for real (previously this
+    endpoint required a valid access token but had nothing to actually
+    invalidate -- the access token itself kept working until it expired
+    on its own). `payload` is optional so an older/other client that
+    still calls this with no body -- or with only its access token, the
+    way the pre-12.3 frontend did -- doesn't get a hard error; it just
+    revokes nothing server-side and the client is still responsible for
+    discarding its tokens, same as before.
+
+    Scoped to `user_id == current_user.id`: a valid access token only
+    lets you revoke your own sessions, never an arbitrary refresh token
+    someone else's client happens to send here.
+    """
+    if payload and payload.refresh_token:
+        token_row = (
+            db.query(RefreshToken)
+            .filter(
+                RefreshToken.token_hash == hash_refresh_token(payload.refresh_token),
+                RefreshToken.user_id == current_user.id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .first()
+        )
+        if token_row:
+            token_row.revoked_at = datetime.now(timezone.utc)
+            token_row.revoked_reason = "logout"
+            db.commit()
+
     return {"message": "Logged out successfully."}
 
 
@@ -171,11 +300,24 @@ def reset_password(payload: ResetPasswordRequest, request: Request, db: Session 
         raise ValidationError("This reset link is invalid or has expired.")
 
     user.hashed_password = hash_password(payload.new_password)
+
+    # Batch 12.3: if the password was reset because it (or the account)
+    # was compromised, an attacker's still-valid refresh token would
+    # otherwise keep their session alive indefinitely -- resetting the
+    # password alone wouldn't log them out. Revoking every one of this
+    # user's sessions closes that gap; the person who just reset the
+    # password logs back in and gets a fresh one.
+    revoked_count = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+        .update({"revoked_at": datetime.now(timezone.utc), "revoked_reason": "password_reset"})
+    )
     db.commit()
 
     log_action(
         db, "auth.password_reset_completed", actor_user_id=user.id,
-        target_type="user", target_id=str(user.id), ip_address=client_ip(request),
+        target_type="user", target_id=str(user.id),
+        details={"sessions_revoked": revoked_count}, ip_address=client_ip(request),
     )
 
     return {"message": "Password updated. You can now log in with your new password."}
