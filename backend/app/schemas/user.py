@@ -64,3 +64,12 @@ class RefreshTokenRequest(BaseModel):
 
 class ResendVerificationRequest(BaseModel):
     email: EmailStr
+
+
+class DeleteAccountRequest(BaseModel):
+    # Re-confirms identity for a destructive, irreversible action even
+    # though the request already carries a valid access token -- same
+    # reasoning most apps use before "delete my account": a token can
+    # be sitting in an unlocked, unattended browser tab in a way a
+    # password typically isn't.
+    password: str = Field(min_length=1, max_length=128)
