@@ -18,17 +18,33 @@ Endpoints are grouped there by the tags described in
 
 ## Authentication
 
-Stateless JWT bearer tokens.
+Two tokens, both returned together (Step 12, Batch 12.3):
 
-1. `POST /auth/signup` or `POST /auth/login` → returns `{ "access_token": "...", "user": {...} }`.
-2. Send it back on every subsequent request: `Authorization: Bearer <access_token>`.
-3. `POST /auth/logout` exists for a consistent API shape (and to leave
-   room for future server-side revocation) but logout is currently a
-   client-side action -- just discard the token.
+1. `POST /auth/signup` or `POST /auth/login` → returns
+   `{ "access_token": "...", "refresh_token": "...", "user": {...} }`.
+2. Send `access_token` back on every subsequent request:
+   `Authorization: Bearer <access_token>`. It's a short-lived, stateless
+   JWT (`ACCESS_TOKEN_EXPIRE_MINUTES` in `.env.example`, 15 min by
+   default) -- no database lookup needed to verify it.
+3. Before it expires, exchange it for a new pair with
+   `POST /auth/refresh { "refresh_token": "..." }`. This rotates the
+   refresh token -- the old one is revoked and the response contains a
+   new one -- so store whichever refresh token you last received, never
+   reuse an old one. (The frontend's `AuthContext` does this automatically
+   shortly before each access token expires; see its module comment.)
+4. `POST /auth/logout { "refresh_token": "..." }` revokes that session
+   for real. The body is optional for backward compatibility, but without
+   it nothing is revoked server-side.
 
-There is no refresh-token flow yet: a token is valid until it expires
-(see `ACCESS_TOKEN_EXPIRE_MINUTES` in `.env.example`), at which point the
-client re-authenticates via `/auth/login`.
+Unlike `access_token`, `refresh_token` is opaque and stateful (checked
+against `app.models.refresh_token.RefreshToken`, hashed at rest), which
+is what makes revocation possible: on logout, and on
+`POST /auth/reset-password` (which revokes every refresh token for that
+account, so a compromised session can't outlive the password that was
+reset because of it). Reusing an already-rotated refresh token is treated
+as theft and revokes its entire session, not just that one token -- see
+`app/models/refresh_token.py` and the `/auth/refresh` route's docstring
+for the full mechanism.
 
 ## The business/branch model (read this before calling anything else)
 
@@ -110,6 +126,7 @@ Keyed by client IP. Exceeding a limit returns `429 Too Many Requests`.
 |---|---|
 | `POST /auth/signup` | 5/minute |
 | `POST /auth/login` | 10/minute |
+| `POST /auth/refresh` | 30/minute |
 | `POST /auth/forgot-password` | 5/minute |
 | `POST /auth/reset-password` | 10/minute |
 | `POST /auth/resend-verification` | 5/minute |
