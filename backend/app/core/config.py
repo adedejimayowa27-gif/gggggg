@@ -28,7 +28,19 @@ class Settings(BaseSettings):
     # --- Auth / JWT ---
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # Batch 12.3: shortened from 60 to 15 now that refresh tokens exist --
+    # a stolen access token is only ever useful for a short window, and
+    # AuthContext (frontend) refreshes proactively before it expires, so
+    # this is invisible to a logged-in user. Existing deployments that
+    # set ACCESS_TOKEN_EXPIRE_MINUTES explicitly in their real .env are
+    # unaffected; this only changes the default for anyone who hasn't.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    # How long a refresh token stays valid without being used. Each
+    # /auth/refresh call issues a new one with a fresh expiry (rotation --
+    # see app/models/refresh_token.py), so an active user's session
+    # effectively never expires; this window is really "how long can
+    # someone stay logged out before needing to log in again."
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:3000"
