@@ -84,7 +84,16 @@ def invite_member(db: Session, business: Business, invited_by: User, email: str,
     destination_path = "/login" if existing_user else "/signup"
     signup_url = f"{settings.FRONTEND_URL}{destination_path}"
     subject, html = render_team_invite_email(business.name, invited_by.email, signup_url)
-    send_email(normalized_email, subject, html)
+
+    # Not a persisted column -- just attached to this in-memory instance so
+    # the route/response and audit log can tell the inviter whether the
+    # email actually went out (vs. silently vanishing, which is the bug
+    # this batch fixes: a missing/misconfigured provider, or -- very
+    # commonly with Resend's sandbox/unverified-domain senders -- a
+    # recipient that isn't the account's own verified address). When this
+    # is False, the frontend should tell the inviter to share the signup
+    # link with the invitee directly.
+    member.email_sent = send_email(normalized_email, subject, html)
 
     return member
 
