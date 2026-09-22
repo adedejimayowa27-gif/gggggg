@@ -162,6 +162,14 @@ class Settings(BaseSettings):
     # capable of taking over an account, so it should stop working well
     # before someone forgets they ever requested it.
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+    # --- Email verification (Step 12, Batch 12.2) ---
+    # How long a "verify your email" link stays valid. Longer than the
+    # password-reset window above on purpose: a password-reset link
+    # protects account takeover (short-lived by design), while this one
+    # just confirms the address is real and reachable -- a stale link is
+    # an annoyance, not a security hole, so it gets a full day rather than
+    # 30 minutes.
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
     model_config = SettingsConfigDict(
         env_file=".env",
