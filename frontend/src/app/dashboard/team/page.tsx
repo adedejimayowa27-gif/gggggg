@@ -91,10 +91,18 @@ export default function TeamPage() {
     setInviteFeedback(null);
     try {
       const sentTo = inviteEmail.trim();
-      await inviteTeamMember(primaryBusiness.id, { email: sentTo, role: inviteRole }, token);
+      const created = await inviteTeamMember(primaryBusiness.id, { email: sentTo, role: inviteRole }, token);
       setInviteEmail("");
       setInviteRole("member");
-      setInviteFeedback(`Invite sent to ${sentTo}.`);
+      // The invite itself always succeeds independent of email delivery
+      // (see backend/app/services/team.py) -- so a failed send still
+      // needs to reach the inviter, or they'll assume the invitee got a
+      // link that never arrived.
+      setInviteFeedback(
+        created.email_sent === false
+          ? `${sentTo} was added, but the invite email couldn't be sent -- share the signup link with them directly.`
+          : `Invite sent to ${sentTo}.`
+      );
       load();
     } catch (err) {
       setInviteError(err instanceof ApiError ? err.message : "Could not send the invite.");
