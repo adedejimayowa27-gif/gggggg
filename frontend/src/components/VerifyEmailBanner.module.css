@@ -1,0 +1,49 @@
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+  padding: 10px 20px;
+  background: rgba(227, 169, 62, 0.12);
+  border-bottom: 1px solid rgba(227, 169, 62, 0.35);
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
+.errorText {
+  color: var(--clay);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 0.75rem);
+  flex-shrink: 0;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.link:hover:not(:disabled) {
+  color: var(--gold-deep);
+}
