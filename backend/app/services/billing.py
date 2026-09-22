@@ -165,6 +165,44 @@ def check_max_transactions_this_month(db: Session, business: Business) -> None:
 # ---------------------------------------------------------------------------
 
 
+def cancel_subscription(subscription: Subscription) -> bool:
+    """
+    Cancels a business's Stripe subscription immediately (not at period
+    end -- once we're deleting the business/account, there's no "let it
+    run out the paid period" option, since nothing will exist to bill
+    against afterward). Used by account deletion (app/services/user.py)
+    before the business row itself is deleted, so a canceled-in-our-DB
+    business never keeps generating Stripe invoices for a customer who
+    no longer has an account.
+
+    Returns False (never raises) for anything that isn't a genuine
+    Stripe API failure worth surfacing -- no stripe_subscription_id (free
+    plan, or paid but never completed checkout) and Stripe already not
+    knowing about the subscription (already canceled, e.g. via a webhook
+    that arrived first) both just mean "nothing to cancel", not an
+    error. A real StripeError is logged and also returns False rather
+    than raising, since a Stripe outage should never be the reason an
+    account deletion the person explicitly requested fails outright --
+    see app/services/user.py's delete_account for how that tradeoff
+    (an orphaned Stripe subscription vs. a blocked deletion) is handled.
+    """
+    if not subscription.stripe_subscription_id or not settings.STRIPE_SECRET_KEY:
+        return False
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    try:
+        stripe.Subscription.delete(subscription.stripe_subscription_id)
+    except stripe.error.InvalidRequestError:
+        # Already canceled or never existed on Stripe's side -- fine.
+        return False
+    except stripe.error.StripeError as exc:
+        logger.warning(
+            "Failed to cancel Stripe subscription %s for business %s: %s",
+            subscription.stripe_subscription_id, subscription.business_id, exc,
+        )
+        return False
+    return True
+
+
 def create_checkout_session(db: Session, business: Business, plan: Plan, success_url: str, cancel_url: str) -> str:
     """Returns the Stripe-hosted checkout page URL for upgrading a business to `plan`."""
     _require_stripe_configured()
