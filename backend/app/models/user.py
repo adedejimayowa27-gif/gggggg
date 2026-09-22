@@ -3,6 +3,9 @@ User model.
 
 One user can own multiple businesses (see Business.owner_id). Auth
 endpoints (Batch 3) will read/write through this model.
+
+is_email_verified (Batch 12.2): tracked but not enforced. See
+app/api/routes/auth.py's module docstring for the reasoning.
 """
 import uuid
 from datetime import datetime
@@ -25,6 +28,10 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Batch 12.2: does NOT gate login or any route -- see
+    # app/api/routes/auth.py's docstring for why. Purely informational
+    # (the frontend shows a banner and a resend option until it's true).
+    is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
