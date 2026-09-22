@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { DashboardProvider } from "@/context/DashboardContext";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import DashboardTopbar from "@/components/DashboardTopbar";
+import VerifyEmailBanner from "@/components/VerifyEmailBanner";
 import styles from "./dashboard.module.css";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -47,6 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className={styles.main}>
           <DashboardTopbar onMenuToggle={() => setIsMobileNavOpen((open) => !open)} />
+          <VerifyEmailBanner />
           <div className={styles.content}>{children}</div>
         </div>
       </div>
