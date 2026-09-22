@@ -1,0 +1,119 @@
+.header {
+  margin-bottom: 1.5rem;
+}
+
+.headerText h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin-top: 0.3rem;
+  font-size: 0.875rem;
+  color: var(--sage);
+}
+
+.card {
+  background: var(--ink-raised);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.dangerCard {
+  composes: card;
+  border-color: rgba(220, 80, 80, 0.35);
+}
+
+.cardTitle {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.cardDescription {
+  font-size: 0.8rem;
+  color: var(--sage);
+  margin-top: 0.15rem;
+  margin-bottom: 1rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.input {
+  width: 100%;
+  max-width: 320px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--paper);
+  margin-bottom: 0.75rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.primaryButton {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dangerButton {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(220, 80, 80, 0.5);
+  background: transparent;
+  color: #e0685f;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dangerButtonConfirm {
+  composes: dangerButton;
+  background: rgba(220, 80, 80, 0.15);
+}
+
+.dangerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  font-size: 0.8rem;
+  color: #e0685f;
+  margin-top: 0.5rem;
+}
+
+.notice {
+  font-size: 0.8rem;
+  color: var(--sage);
+  margin-top: 0.5rem;
+}
+
+.blockerList {
+  margin-top: 0.5rem;
+  padding-left: 1.1rem;
+  font-size: 0.8rem;
+  color: var(--sage);
+}
