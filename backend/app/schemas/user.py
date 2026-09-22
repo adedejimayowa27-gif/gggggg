@@ -36,6 +36,11 @@ class UserOut(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    # Batch 12.3: an opaque, single-use-per-rotation session token -- see
+    # app/models/refresh_token.py. Store it alongside access_token and
+    # send it to POST /auth/refresh (to get a new access_token before
+    # this one expires) or POST /auth/logout (to revoke this session).
+    refresh_token: str
     token_type: str = "bearer"
     user: UserOut
 
@@ -51,6 +56,10 @@ class ResetPasswordRequest(BaseModel):
 
 class VerifyEmailRequest(BaseModel):
     token: str
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 class ResendVerificationRequest(BaseModel):
