@@ -110,6 +110,10 @@ Keyed by client IP. Exceeding a limit returns `429 Too Many Requests`.
 |---|---|
 | `POST /auth/signup` | 5/minute |
 | `POST /auth/login` | 10/minute |
+| `POST /auth/forgot-password` | 5/minute |
+| `POST /auth/reset-password` | 10/minute |
+| `POST /auth/resend-verification` | 5/minute |
+| `POST /auth/verify-email` | 10/minute |
 | Everything else | 120/minute (default) |
 
 (See `app/core/rate_limit.py`.)
