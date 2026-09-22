@@ -26,10 +26,12 @@ lock anyone out as a side effect of this batch. Still not enforced as of
 Batch 12.3 (sessions) below -- if it's ever added, it belongs in
 get_current_user (app/api/deps.py), not here.
 """
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -51,6 +53,7 @@ from app.db.session import get_db
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.user import (
+    DeleteAccountRequest,
     ForgotPasswordRequest,
     RefreshTokenRequest,
     ResendVerificationRequest,
@@ -64,6 +67,7 @@ from app.schemas.user import (
 from app.services.audit import client_ip, log_action
 from app.services.email import render_password_reset_email, render_verification_email, send_email
 from app.services.team import link_pending_invites
+from app.services.user import delete_account, export_account_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -261,6 +265,67 @@ def logout(
 @router.get("/me", response_model=UserOut)
 def read_current_user(current_user: User = Depends(get_current_user)):
     return UserOut.model_validate(current_user)
+
+
+@router.get("/me/export")
+@limiter.limit("5/minute")
+def export_my_data(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Batch 12.5. Downloads everything about this account as a single JSON
+    file -- see app/services/user.py's export_account_data for exactly
+    what's included (and, deliberately, what isn't: raw transaction rows,
+    which stay behind each business's own existing CSV export endpoint
+    instead of ballooning this payload; and anything secret -- password
+    hash, refresh tokens, integration OAuth tokens -- which never leaves
+    its own table at all).
+    """
+    data = export_account_data(db, current_user)
+    log_action(
+        db, "auth.data_exported", actor_user_id=current_user.id,
+        target_type="user", target_id=str(current_user.id), ip_address=client_ip(request),
+    )
+    return StreamingResponse(
+        iter([json.dumps(data, indent=2)]),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="account-data-export.json"'},
+    )
+
+
+@router.delete("/me", status_code=status.HTTP_200_OK)
+@limiter.limit("3/minute")
+def delete_my_account(
+    payload: DeleteAccountRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Batch 12.5. Permanently deletes the account and everything under it.
+    Re-checks the password even though the request is already
+    authenticated (see DeleteAccountRequest's docstring), and blocks --
+    with a 409, via app.services.user's ConflictError -- when the account
+    owns a business other people are still actively using; see
+    app/services/user.py's businesses_blocking_deletion for why and what
+    to do about it.
+
+    No confirmation-email step: this app has no async
+    "click here to confirm" flow for anything else destructive either
+    (password reset, verify-email are the only token-based ones, and
+    both are opt-in actions the person initiates from a link, not a
+    same-session irreversible action like this one) -- the password
+    re-check plus the frontend's own "are you sure" is the same bar as
+    every other destructive action in this app (e.g. removing a team
+    member).
+    """
+    if not verify_password(payload.password, current_user.hashed_password):
+        raise UnauthorizedError("Incorrect password.")
+
+    delete_account(db, current_user)
+    return {"message": "Your account has been permanently deleted."}
 
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
