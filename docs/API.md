@@ -46,6 +46,23 @@ as theft and revokes its entire session, not just that one token -- see
 `app/models/refresh_token.py` and the `/auth/refresh` route's docstring
 for the full mechanism.
 
+### Exporting and deleting your own data (Batch 12.5)
+
+- `GET /auth/me/export` downloads a JSON file with everything about the
+  account: profile, businesses you own (with team-member and
+  subscription summaries, but not raw transactions -- each business's
+  existing `/businesses/{id}/transactions/export` is linked instead),
+  team memberships on businesses you don't own, and your recent account
+  activity from the audit log. Never includes the password hash, refresh
+  tokens, or any integration's stored OAuth tokens.
+- `DELETE /auth/me { "password": "..." }` permanently deletes the
+  account and everything under it (owned businesses and all their data,
+  team memberships, sessions). Requires the current password even
+  though the request is already authenticated. Returns `409` if you own
+  a business that still has other *active* team members -- remove them
+  via `DELETE /businesses/{id}/team/{member_id}` first, since there's no
+  way yet to delete just a business or transfer its ownership.
+
 ## The business/branch model (read this before calling anything else)
 
 Every endpoint except `/health` and `/auth/*` is nested under
@@ -131,6 +148,8 @@ Keyed by client IP. Exceeding a limit returns `429 Too Many Requests`.
 | `POST /auth/reset-password` | 10/minute |
 | `POST /auth/resend-verification` | 5/minute |
 | `POST /auth/verify-email` | 10/minute |
+| `GET /auth/me/export` | 5/minute |
+| `DELETE /auth/me` | 3/minute |
 | Everything else | 120/minute (default) |
 
 (See `app/core/rate_limit.py`.)
