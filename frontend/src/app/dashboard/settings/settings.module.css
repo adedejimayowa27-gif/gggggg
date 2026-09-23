@@ -151,17 +151,35 @@
 }
 
 .linkButton {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
   background: transparent;
-  border: none;
-  color: var(--sage);
-  text-decoration: underline;
+  color: var(--paper);
+  text-decoration: none;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
   margin-left: auto;
 }
 
-.linkButton:hover {
-  color: var(--paper);
+.linkButton:hover:not(:disabled) {
+  background: var(--surface-active);
+  border-color: var(--gold);
+}
+
+.linkButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.linkStack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
 }
 
 /* ---------- Forms ---------- */
