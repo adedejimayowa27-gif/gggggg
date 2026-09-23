@@ -193,7 +193,13 @@ export default function GoogleIntegrationCard({ businessId, role }: Props) {
     try {
       const data = await previewSheet(businessId, token);
       setPreview(data);
-      setMapping(data.suggested_mapping);
+      // suggested_mapping on SheetPreview is typed as the looser
+      // Record<string, string | null> (unlike CSV import's
+      // ImportPreview, which is typed as ColumnMapping directly) --
+      // the backend (services/sheets_sync.py) always builds it from
+      // the same StandardField keys, so this cast just matches what's
+      // actually there.
+      setMapping(data.suggested_mapping as ColumnMapping);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not preview this sheet.");
     } finally {
