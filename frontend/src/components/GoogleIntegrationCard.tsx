@@ -286,33 +286,46 @@ export default function GoogleIntegrationCard({ businessId, role }: Props) {
           )}
           {status.last_sync_error && <p className={styles.error}>Last sync error: {status.last_sync_error}</p>}
 
-          {canManage && !isPickingSheet && (
-            <button className={styles.linkButton} onClick={openSheetPicker}>
-              {status.spreadsheet_id ? "Change spreadsheet" : "Choose a spreadsheet"}
-            </button>
-          )}
+          <div className={styles.linkStack}>
+            {canManage && !isPickingSheet && (
+              <button className={styles.linkButton} onClick={openSheetPicker}>
+                {status.spreadsheet_id ? "Change spreadsheet" : "Choose a spreadsheet"}
+              </button>
+            )}
+            {status.spreadsheet_id && !preview && (
+              <button className={styles.linkButton} onClick={handleLoadPreview} disabled={isLoadingPreview}>
+                {isLoadingPreview
+                  ? "Loading preview…"
+                  : status.has_confirmed_mapping
+                  ? "Review column mapping"
+                  : "Preview and map columns"}
+              </button>
+            )}
+          </div>
 
           {canManage && isPickingSheet && (
             <div className={styles.formRow}>
-              <label>Spreadsheet</label>
               {spreadsheets === null && <p className={styles.muted}>Loading spreadsheets…</p>}
               {spreadsheets && (
-                <select
-                  value={selectedSpreadsheetId}
-                  onChange={(e) => handleSpreadsheetChosen(e.target.value)}
-                >
-                  <option value="">-- Select a spreadsheet --</option>
-                  {spreadsheets.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                <label>
+                  Spreadsheet
+                  <select
+                    value={selectedSpreadsheetId}
+                    onChange={(e) => handleSpreadsheetChosen(e.target.value)}
+                  >
+                    <option value="">-- Select a spreadsheet --</option>
+                    {spreadsheets.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
 
               {worksheets && (
-                <>
-                  <label>Worksheet (tab)</label>
+                <label>
+                  Worksheet (tab)
                   <select
                     value={selectedWorksheetTitle}
                     onChange={(e) => setSelectedWorksheetTitle(e.target.value)}
@@ -324,8 +337,9 @@ export default function GoogleIntegrationCard({ businessId, role }: Props) {
                       </option>
                     ))}
                   </select>
-                </>
+                </label>
               )}
+
 
               <div>
                 <button
@@ -342,17 +356,6 @@ export default function GoogleIntegrationCard({ businessId, role }: Props) {
             </div>
           )}
 
-          {status.spreadsheet_id && !preview && (
-            <div>
-              <button className={styles.linkButton} onClick={handleLoadPreview} disabled={isLoadingPreview}>
-                {isLoadingPreview
-                  ? "Loading preview…"
-                  : status.has_confirmed_mapping
-                  ? "Review column mapping"
-                  : "Preview and map columns"}
-              </button>
-            </div>
-          )}
 
           {preview && mapping && (
             <div className={styles.mappingBlock}>
