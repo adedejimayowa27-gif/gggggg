@@ -275,30 +275,43 @@ export default function MicrosoftIntegrationCard({ businessId, role }: Props) {
           )}
           {status.last_sync_error && <p className={styles.error}>Last sync error: {status.last_sync_error}</p>}
 
-          {canManage && !isPickingSheet && (
-            <button className={styles.linkButton} onClick={openSheetPicker}>
-              {status.workbook_item_id ? "Change workbook" : "Choose a workbook"}
-            </button>
-          )}
+          <div className={styles.linkStack}>
+            {canManage && !isPickingSheet && (
+              <button className={styles.linkButton} onClick={openSheetPicker}>
+                {status.workbook_item_id ? "Change workbook" : "Choose a workbook"}
+              </button>
+            )}
+            {status.workbook_item_id && !preview && (
+              <button className={styles.linkButton} onClick={handleLoadPreview} disabled={isLoadingPreview}>
+                {isLoadingPreview
+                  ? "Loading preview…"
+                  : status.has_confirmed_mapping
+                  ? "Review column mapping"
+                  : "Preview and map columns"}
+              </button>
+            )}
+          </div>
 
           {canManage && isPickingSheet && (
             <div className={styles.formRow}>
-              <label>Workbook</label>
               {workbooks === null && <p className={styles.muted}>Loading workbooks…</p>}
               {workbooks && (
-                <select value={selectedWorkbookId} onChange={(e) => handleWorkbookChosen(e.target.value)}>
-                  <option value="">-- Select a workbook --</option>
-                  {workbooks.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+                <label>
+                  Workbook
+                  <select value={selectedWorkbookId} onChange={(e) => handleWorkbookChosen(e.target.value)}>
+                    <option value="">-- Select a workbook --</option>
+                    {workbooks.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
 
               {worksheets && (
-                <>
-                  <label>Worksheet (tab)</label>
+                <label>
+                  Worksheet (tab)
                   <select value={selectedWorksheetId} onChange={(e) => setSelectedWorksheetId(e.target.value)}>
                     <option value="">-- Select a worksheet --</option>
                     {worksheets.map((w) => (
@@ -307,7 +320,7 @@ export default function MicrosoftIntegrationCard({ businessId, role }: Props) {
                       </option>
                     ))}
                   </select>
-                </>
+                </label>
               )}
 
               <div>
@@ -322,18 +335,6 @@ export default function MicrosoftIntegrationCard({ businessId, role }: Props) {
                   Cancel
                 </button>
               </div>
-            </div>
-          )}
-
-          {status.workbook_item_id && !preview && (
-            <div>
-              <button className={styles.linkButton} onClick={handleLoadPreview} disabled={isLoadingPreview}>
-                {isLoadingPreview
-                  ? "Loading preview…"
-                  : status.has_confirmed_mapping
-                  ? "Review column mapping"
-                  : "Preview and map columns"}
-              </button>
             </div>
           )}
 
