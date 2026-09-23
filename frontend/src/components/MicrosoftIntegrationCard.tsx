@@ -185,7 +185,10 @@ export default function MicrosoftIntegrationCard({ businessId, role }: Props) {
     try {
       const data = await previewExcelWorksheet(businessId, token);
       setPreview(data);
-      setMapping(data.suggested_mapping);
+      // Same Record<string, ...> vs ColumnMapping looseness as
+      // GoogleIntegrationCard's identical line -- see that file's
+      // comment here.
+      setMapping(data.suggested_mapping as ColumnMapping);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not preview this worksheet.");
     } finally {
