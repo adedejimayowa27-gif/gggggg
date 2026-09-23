@@ -73,7 +73,7 @@ function VerifyEmailContent() {
 
       {status === "error" && (
         <p className={styles.error}>
-          {error} If it's expired, log in and use "Resend email" from the banner at the top of the
+          {error} If it&apos;s expired, log in and use &quot;Resend email&quot; from the banner at the top of the
           dashboard.
         </p>
       )}
