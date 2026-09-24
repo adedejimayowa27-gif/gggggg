@@ -16,6 +16,10 @@ change.
   one (deleting needs the Admin role). Changes to rows that came from an
   import or sync are remembered, so the next sync never brings the old row
   back or duplicates it.
+- **Expenses** -- record rent, salaries, transport and other running costs
+  (kept separate from the cost of the goods sold). They come off gross
+  profit to give **net profit**, shown on the Overview, the period
+  comparison, and to the AI assistant.
 - **Analytics** -- revenue, cost and profit summaries and time series, product
   rankings, breakdowns by category / customer / payment method / branch,
   new vs. returning customers, seasonality, and 80/20 (Pareto) analysis.
