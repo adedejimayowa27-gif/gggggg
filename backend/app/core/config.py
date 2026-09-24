@@ -183,6 +183,23 @@ class Settings(BaseSettings):
     # 30 minutes.
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
+    # --- Two-factor login (Step 12, Batch 12.6) ---
+    # Fernet key encrypting TOTP secrets at rest -- same
+    # generate-and-set-once pattern as GOOGLE_TOKEN_ENCRYPTION_KEY above;
+    # see app/services/totp.py. Deliberately its own key rather than
+    # reusing Google's/Microsoft's: rotating this one (which would log
+    # every 2FA user out of their authenticator setup and force them to
+    # re-enroll) should never be forced by, or force, rotating an
+    # unrelated integration's key.
+    TOTP_ENCRYPTION_KEY: str = ""
+    # How long the short-lived challenge issued by POST /auth/login (when
+    # the account has 2FA enabled) stays valid for POST /auth/2fa/verify-login.
+    # Short on purpose, like the password-reset token above -- this token
+    # alone doesn't grant access (a valid code is still required), but it
+    # does confirm the password was already correct, so it shouldn't
+    # linger.
+    TWO_FACTOR_CHALLENGE_EXPIRE_MINUTES: int = 10
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
