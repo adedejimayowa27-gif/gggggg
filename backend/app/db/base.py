@@ -26,3 +26,4 @@ from app.models.background_job import BackgroundJob  # noqa: F401
 from app.models.microsoft_integration import MicrosoftIntegration  # noqa: F401
 from app.models.refresh_token import RefreshToken  # noqa: F401
 from app.models.transaction_tombstone import TransactionTombstone  # noqa: F401
+from app.models.expense import Expense  # noqa: F401
