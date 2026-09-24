@@ -647,15 +647,11 @@ def execute_confirmed_import(db, import_session_id: str, mapping: dict) -> dict:
     # for every valid row up front so the "already exists" lookup is a
     # single query, not one query per row.
     fingerprints = [compute_fingerprint(business_id_str, row) for row in valid_rows]
-    existing_fingerprints = {
-        row[0]
-        for row in db.query(Transaction.fingerprint)
-        .filter(
-            Transaction.business_id == import_session.business_id,
-            Transaction.fingerprint.in_(fingerprints),
-        )
-        .all()
-    }
+    # Step 13, Batch 1: also skips rows a person has since deleted or edited
+    # in the app (tombstones), not just rows that currently exist.
+    from app.services.transactions import existing_fingerprints as _existing_fingerprints
+
+    existing_fingerprints = _existing_fingerprints(db, import_session.business_id, fingerprints)
 
     imported_count = 0
     skipped_count = 0
