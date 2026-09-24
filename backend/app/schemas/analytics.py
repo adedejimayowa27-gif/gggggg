@@ -20,6 +20,17 @@ class AnalyticsSummary(BaseModel):
     transaction_count: int
     average_transaction_value: Decimal
 
+    # Step 13, Batch 2: operating expenses (rent, salaries, ...) recorded for
+    # the same period, and what is left after them. `gross_profit` above is
+    # unchanged (revenue minus the cost of the goods sold). When no expenses
+    # are recorded, `operating_expenses` is 0, `net_profit` equals
+    # `gross_profit`, and `expense_count` is 0 so a client can say so instead
+    # of presenting the figure as final.
+    operating_expenses: Decimal = Decimal(0)
+    expense_count: int = 0
+    net_profit: Decimal = Decimal(0)
+    net_profit_margin: Decimal = Decimal(0)  # percentage of revenue
+
 
 class TimeseriesPoint(BaseModel):
     period_start: date
