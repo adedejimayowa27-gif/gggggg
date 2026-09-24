@@ -32,6 +32,7 @@ from app.services.google_sheets import fetch_sheet_values
 from app.services.import_pipeline import compute_fingerprint, suggest_mapping, validate_and_convert_rows
 from app.services.sheets_import import parse_sheet_values
 from app.services.billing import check_max_transactions_this_month
+from app.services.transactions import existing_fingerprints as get_existing_fingerprints
 
 
 def _require_selection(integration: GoogleIntegration) -> None:
@@ -112,12 +113,9 @@ def sync_now(db: Session, business: Business, integration: GoogleIntegration) ->
     # computed for every valid row up front so the "already exists"
     # lookup is a single query, not one query per row.
     fingerprints = [compute_fingerprint(business_id_str, row) for row in valid_rows]
-    existing_fingerprints = {
-        row[0]
-        for row in db.query(Transaction.fingerprint)
-        .filter(Transaction.business_id == business.id, Transaction.fingerprint.in_(fingerprints))
-        .all()
-    }
+    # Step 13, Batch 1: also skips rows a person has since deleted or edited
+    # in the app (tombstones), not just rows that currently exist.
+    existing_fingerprints = get_existing_fingerprints(db, business.id, fingerprints)
 
     import_session = ImportSession(
         id=uuid.uuid4(),
