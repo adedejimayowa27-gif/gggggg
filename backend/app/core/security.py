@@ -118,3 +118,29 @@ def decode_email_verification_token(token: str) -> Optional[str]:
         return payload.get("sub")
     except JWTError:
         return None
+
+
+def create_two_factor_challenge_token(user_id: str) -> str:
+    """
+    Same shape as create_password_reset_token above (a distinct
+    "purpose" claim so this can never be swapped for a normal access
+    token) -- issued by POST /auth/login once the password has already
+    been verified for an account with 2FA enabled, and redeemed by
+    POST /auth/2fa/verify-login. On its own it grants no access: it
+    only proves "the password for this account was correct a few
+    minutes ago", not "this session is authenticated".
+    """
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.TWO_FACTOR_CHALLENGE_EXPIRE_MINUTES)
+    to_encode: dict[str, Any] = {"sub": user_id, "exp": expire, "purpose": "two_factor_challenge"}
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_two_factor_challenge_token(token: str) -> Optional[str]:
+    """Returns the user id if the token is valid AND was issued for a 2FA login challenge, else None."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("purpose") != "two_factor_challenge":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
