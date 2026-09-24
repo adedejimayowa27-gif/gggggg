@@ -29,6 +29,7 @@ get_current_user (app/api/deps.py), not here.
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Union
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import StreamingResponse
@@ -41,8 +42,10 @@ from app.core.security import (
     create_access_token,
     create_email_verification_token,
     create_password_reset_token,
+    create_two_factor_challenge_token,
     decode_email_verification_token,
     decode_password_reset_token,
+    decode_two_factor_challenge_token,
     generate_refresh_token,
     hash_password,
     hash_refresh_token,
@@ -59,6 +62,12 @@ from app.schemas.user import (
     ResendVerificationRequest,
     ResetPasswordRequest,
     Token,
+    TwoFactorChallenge,
+    TwoFactorCodeConfirmRequest,
+    TwoFactorEnableOut,
+    TwoFactorEnableRequest,
+    TwoFactorSetupOut,
+    TwoFactorVerifyLoginRequest,
     UserCreate,
     UserLogin,
     UserOut,
@@ -68,6 +77,7 @@ from app.services.audit import client_ip, log_action
 from app.services.email import render_password_reset_email, render_verification_email, send_email
 from app.services.team import link_pending_invites
 from app.services.user import delete_account, export_account_data
+from app.services import totp
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -151,7 +161,7 @@ def _issue_tokens(db: Session, user: User, family_id: uuid.UUID | None = None) -
     return Token(access_token=access_token, refresh_token=raw_refresh_token, user=UserOut.model_validate(user))
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Union[Token, TwoFactorChallenge])
 @limiter.limit("10/minute")
 def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
@@ -167,12 +177,209 @@ def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)):
     if not user.is_active:
         raise UnauthorizedError("User account is inactive.")
 
+    if user.is_2fa_enabled:
+        # Password was correct, but that's only the first factor -- no
+        # session is issued yet. The challenge token proves that much to
+        # POST /auth/2fa/verify-login without granting any access on its
+        # own (see create_two_factor_challenge_token's docstring).
+        log_action(
+            db, "auth.login_2fa_challenge", actor_user_id=user.id,
+            target_type="user", target_id=str(user.id), ip_address=client_ip(request),
+        )
+        return TwoFactorChallenge(challenge_token=create_two_factor_challenge_token(str(user.id)))
+
     log_action(
         db, "auth.login", actor_user_id=user.id,
         target_type="user", target_id=str(user.id), ip_address=client_ip(request),
     )
 
     return _issue_tokens(db, user)
+
+
+@router.post("/2fa/verify-login", response_model=Token)
+@limiter.limit("5/minute")
+def verify_two_factor_login(
+    payload: TwoFactorVerifyLoginRequest, request: Request, db: Session = Depends(get_db)
+):
+    """
+    Redeems a challenge from POST /auth/login. Accepts either a live
+    TOTP code or a recovery code -- the two request shapes are
+    indistinguishable by length/format alone (a recovery code is
+    "xxxxxxxx-xxxxxxxx", a TOTP code is 6 digits), so this tries TOTP
+    first (cheap, no DB write) and falls back to recovery codes (which
+    DOES write, consuming the match) only if that fails.
+
+    Rate-limited tighter than login itself (5/minute vs 10/minute) --
+    unlike a password, a 6-digit TOTP code is only ~1 million
+    possibilities, so brute-forcing it is far more feasible without a
+    strict limit here.
+    """
+    user_id = decode_two_factor_challenge_token(payload.challenge_token)
+    if not user_id:
+        raise UnauthorizedError("This login attempt has expired. Please log in again.")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_2fa_enabled or not user.totp_secret_encrypted:
+        raise UnauthorizedError("This login attempt has expired. Please log in again.")
+
+    secret = totp.decrypt_secret(user.totp_secret_encrypted)
+    if totp.verify_totp_code(secret, payload.code):
+        log_action(
+            db, "auth.login", actor_user_id=user.id,
+            target_type="user", target_id=str(user.id), ip_address=client_ip(request),
+        )
+        return _issue_tokens(db, user)
+
+    remaining_codes = totp.consume_recovery_code(user.totp_recovery_codes_hashed, payload.code)
+    if remaining_codes is not None:
+        user.totp_recovery_codes_hashed = remaining_codes
+        db.commit()
+        log_action(
+            db, "auth.login_2fa_recovery_code_used", actor_user_id=user.id,
+            target_type="user", target_id=str(user.id),
+            details={"recovery_codes_remaining": len(remaining_codes)}, ip_address=client_ip(request),
+        )
+        return _issue_tokens(db, user)
+
+    log_action(
+        db, "auth.login_2fa_failed", actor_user_id=user.id,
+        target_type="user", target_id=str(user.id), ip_address=client_ip(request),
+    )
+    raise UnauthorizedError("Incorrect code.")
+
+
+@router.post("/2fa/setup", response_model=TwoFactorSetupOut)
+@limiter.limit("10/minute")
+def setup_two_factor(
+    request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """
+    Starts (or restarts) enrollment -- generates a new secret and
+    returns it as a QR code (scan) and raw text (manual entry), but does
+    NOT enable 2FA yet; that only happens once POST /auth/2fa/enable
+    verifies a real code generated from this secret, which is what
+    proves the person actually finished scanning it into their
+    authenticator app rather than the request just silently succeeding.
+
+    Calling this again before enabling replaces the pending secret --
+    intentionally forgiving of a lost/closed tab or a bad QR scan, since
+    nothing is protected by the old pending secret yet.
+    """
+    if current_user.is_2fa_enabled:
+        raise ConflictError("Two-factor authentication is already enabled. Disable it first to re-enroll.")
+
+    secret = totp.generate_secret()
+    current_user.totp_secret_encrypted = totp.encrypt_secret(secret)
+    db.commit()
+
+    otpauth_url = totp.provisioning_uri(secret, current_user.email)
+    return TwoFactorSetupOut(
+        secret=secret, otpauth_url=otpauth_url, qr_code_svg=totp.qr_code_svg(otpauth_url)
+    )
+
+
+@router.post("/2fa/enable", response_model=TwoFactorEnableOut)
+@limiter.limit("10/minute")
+def enable_two_factor(
+    payload: TwoFactorEnableRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.is_2fa_enabled:
+        raise ConflictError("Two-factor authentication is already enabled.")
+    if not current_user.totp_secret_encrypted:
+        raise ValidationError("Call /auth/2fa/setup first to get a code to scan.")
+
+    secret = totp.decrypt_secret(current_user.totp_secret_encrypted)
+    if not totp.verify_totp_code(secret, payload.code):
+        raise UnauthorizedError("Incorrect code. Check the time on your device and try again.")
+
+    recovery_codes = totp.generate_recovery_codes()
+    current_user.is_2fa_enabled = True
+    current_user.totp_recovery_codes_hashed = [totp.hash_recovery_code(c) for c in recovery_codes]
+    db.commit()
+
+    log_action(
+        db, "auth.2fa_enabled", actor_user_id=current_user.id,
+        target_type="user", target_id=str(current_user.id), ip_address=client_ip(request),
+    )
+    return TwoFactorEnableOut(recovery_codes=recovery_codes)
+
+
+@router.post("/2fa/disable", status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
+def disable_two_factor(
+    payload: TwoFactorCodeConfirmRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_2fa_enabled:
+        raise ConflictError("Two-factor authentication isn't enabled.")
+    if not verify_password(payload.password, current_user.hashed_password):
+        raise UnauthorizedError("Incorrect password.")
+
+    secret = totp.decrypt_secret(current_user.totp_secret_encrypted) if current_user.totp_secret_encrypted else None
+    code_ok = bool(secret) and totp.verify_totp_code(secret, payload.code)
+    if not code_ok:
+        remaining = totp.consume_recovery_code(current_user.totp_recovery_codes_hashed, payload.code)
+        code_ok = remaining is not None
+
+    if not code_ok:
+        raise UnauthorizedError("Incorrect code.")
+
+    current_user.is_2fa_enabled = False
+    current_user.totp_secret_encrypted = None
+    current_user.totp_recovery_codes_hashed = None
+    db.commit()
+
+    log_action(
+        db, "auth.2fa_disabled", actor_user_id=current_user.id,
+        target_type="user", target_id=str(current_user.id), ip_address=client_ip(request),
+    )
+    return {"message": "Two-factor authentication has been disabled."}
+
+
+@router.post("/2fa/recovery-codes", response_model=TwoFactorEnableOut)
+@limiter.limit("10/minute")
+def regenerate_recovery_codes(
+    payload: TwoFactorCodeConfirmRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Invalidates every existing recovery code and issues a fresh set --
+    for when someone has used most of theirs, or suspects a stored copy
+    was exposed. Same password+code proof as disabling (see
+    TwoFactorCodeConfirmRequest's docstring)."""
+    if not current_user.is_2fa_enabled or not current_user.totp_secret_encrypted:
+        raise ConflictError("Two-factor authentication isn't enabled.")
+    if not verify_password(payload.password, current_user.hashed_password):
+        raise UnauthorizedError("Incorrect password.")
+
+    secret = totp.decrypt_secret(current_user.totp_secret_encrypted)
+    code_ok = totp.verify_totp_code(secret, payload.code)
+    if not code_ok:
+        code_ok = totp.consume_recovery_code(current_user.totp_recovery_codes_hashed, payload.code) is not None
+        # Either way the whole set is replaced below, so there's no need
+        # to persist the post-consumption list here -- unlike
+        # verify_two_factor_login/disable_two_factor, where the account
+        # keeps its (now-shorter) existing set rather than getting a
+        # brand new one.
+
+    if not code_ok:
+        raise UnauthorizedError("Incorrect code.")
+
+    recovery_codes = totp.generate_recovery_codes()
+    current_user.totp_recovery_codes_hashed = [totp.hash_recovery_code(c) for c in recovery_codes]
+    db.commit()
+
+    log_action(
+        db, "auth.2fa_recovery_codes_regenerated", actor_user_id=current_user.id,
+        target_type="user", target_id=str(current_user.id), ip_address=client_ip(request),
+    )
+    return TwoFactorEnableOut(recovery_codes=recovery_codes)
 
 
 @router.post("/refresh", response_model=Token)
