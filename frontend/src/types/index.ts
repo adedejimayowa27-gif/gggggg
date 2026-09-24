@@ -4,6 +4,7 @@ export interface User {
   full_name: string | null;
   is_active: boolean;
   is_email_verified: boolean;
+  is_2fa_enabled: boolean;
   created_at: string;
 }
 
@@ -14,6 +15,27 @@ export interface AuthResponse {
   refresh_token: string;
   token_type: string;
   user: User;
+}
+
+// Batch 12.6: what POST /auth/login returns instead of AuthResponse when
+// the account has 2FA enabled -- the password was correct, but no
+// session exists yet. Redeem challenge_token + a code at
+// POST /auth/2fa/verify-login (which returns a normal AuthResponse) to
+// finish logging in.
+export interface TwoFactorChallenge {
+  two_factor_required: true;
+  challenge_token: string;
+}
+
+export interface TwoFactorSetup {
+  secret: string;
+  otpauth_url: string;
+  qr_code_svg: string;
+}
+
+export interface TwoFactorEnableResult {
+  // Shown exactly once -- not retrievable again after this response.
+  recovery_codes: string[];
 }
 
 export interface Business {
