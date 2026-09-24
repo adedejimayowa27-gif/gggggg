@@ -12,6 +12,10 @@ change.
   re-syncs every 6 hours. Column names are matched automatically, rows are
   validated with a preview and error report, and duplicate transactions are
   never double-counted.
+- **Manual entry** -- add a sale by hand, correct a wrong row, or delete
+  one (deleting needs the Admin role). Changes to rows that came from an
+  import or sync are remembered, so the next sync never brings the old row
+  back or duplicates it.
 - **Analytics** -- revenue, cost and profit summaries and time series, product
   rankings, breakdowns by category / customer / payment method / branch,
   new vs. returning customers, seasonality, and 80/20 (Pareto) analysis.
