@@ -24,6 +24,7 @@ from app.models.alert import Alert
 from app.models.google_integration import GoogleIntegration
 from app.models.microsoft_integration import MicrosoftIntegration
 from app.models.branch import Branch
+from app.models.transaction import Transaction
 from app.models.team_member import ROLE_ORDER, TeamMember
 from app.models.user import User
 
@@ -274,3 +275,15 @@ def get_owned_team_member(member_id: uuid.UUID, business: Business, db: Session)
     if not member:
         raise NotFoundError("Team member not found.")
     return member
+
+
+def get_owned_transaction(transaction_id: uuid.UUID, business: Business, db: Session) -> Transaction:
+    """Fetch a transaction scoped to an already-ownership-checked business."""
+    transaction = (
+        db.query(Transaction)
+        .filter(Transaction.id == transaction_id, Transaction.business_id == business.id)
+        .first()
+    )
+    if not transaction:
+        raise NotFoundError("Transaction not found.")
+    return transaction
