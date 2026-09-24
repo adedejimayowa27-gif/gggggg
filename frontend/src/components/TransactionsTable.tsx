@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch, apiFetchBlob, ApiError } from "@/lib/api";
 import { listBranches } from "@/lib/branches";
-import type { Branch, PaginatedTransactions } from "@/types";
+import { deleteTransaction } from "@/lib/transactions";
+import type { Branch, PaginatedTransactions, Transaction } from "@/types";
+import TransactionFormModal from "@/components/TransactionFormModal";
 import styles from "./TransactionsTable.module.css";
 
 interface Props {
@@ -15,6 +17,12 @@ interface Props {
    * /dashboard/transactions?q=...) actually shows filtered results
    * instead of silently discarding what was typed. */
   initialQuery?: string;
+  /** "member"+ may add and correct transactions. The backend enforces this
+   * on every request; hiding the buttons is only so people aren't shown
+   * actions that would just fail. */
+  canEdit?: boolean;
+  /** "admin"+ may delete a transaction. */
+  canDelete?: boolean;
 }
 
 const PAGE_SIZE = 25;
@@ -53,12 +61,12 @@ function formatDate(value: string): string {
   return dateFormatter.format(new Date(Date.UTC(year, month - 1, day)));
 }
 
-function SkeletonRows() {
+function SkeletonRows({ columns }: { columns: number }) {
   return (
     <>
       {Array.from({ length: 8 }).map((_, i) => (
         <tr key={i}>
-          {Array.from({ length: 8 }).map((_, j) => (
+          {Array.from({ length: columns }).map((_, j) => (
             <td key={j}>
               <span className={styles.skeletonCell} />
             </td>
@@ -69,7 +77,13 @@ function SkeletonRows() {
   );
 }
 
-export default function TransactionsTable({ businessId, refreshSignal, initialQuery }: Props) {
+export default function TransactionsTable({
+  businessId,
+  refreshSignal,
+  initialQuery,
+  canEdit = false,
+  canDelete = false,
+}: Props) {
   const { token } = useAuth();
   const [data, setData] = useState<PaginatedTransactions | null>(null);
   const [page, setPage] = useState(1);
@@ -78,6 +92,21 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
   const [activeQuery, setActiveQuery] = useState(initialQuery ?? "");
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchFilter, setBranchFilter] = useState("");
+
+  // Manual entry / editing / deleting (Step 13, Batch 1). `reloadKey` refetches
+  // the current page in place -- unlike refreshSignal, which is for imports
+  // and deliberately jumps back to page 1.
+  const [reloadKey, setReloadKey] = useState(0);
+  const [formTarget, setFormTarget] = useState<"new" | Transaction | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!notice || notice.kind === "error") return;
+    const timer = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     if (!token) return;
@@ -100,7 +129,7 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setIsLoading(false));
-  }, [businessId, token, page, refreshSignal, activeQuery, branchFilter]);
+  }, [businessId, token, page, refreshSignal, activeQuery, branchFilter, reloadKey]);
 
   // Refreshing after a new import should show the latest data, not
   // whatever page the user happened to be on before.
@@ -150,6 +179,34 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
     }
   };
 
+  const handleSaved = (_saved: Transaction, mode: "created" | "updated") => {
+    setFormTarget(null);
+    setNotice({ kind: "success", text: mode === "created" ? "Sale added." : "Sale updated." });
+    if (mode === "created") setPage(1);
+    setReloadKey((k) => k + 1);
+  };
+
+  const handleDelete = async (transaction: Transaction) => {
+    if (!token) return;
+    setDeletingId(transaction.id);
+    setNotice(null);
+    try {
+      await deleteTransaction(businessId, transaction.id, token);
+      setConfirmingDeleteId(null);
+      setNotice({ kind: "success", text: "Sale deleted." });
+      // Deleting the only row on the last page would otherwise leave an empty page.
+      if (data && data.items.length === 1 && page > 1) setPage(page - 1);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setNotice({
+        kind: "error",
+        text: err instanceof ApiError ? err.message : "Could not delete this sale.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
@@ -196,23 +253,50 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
             Clear
           </button>
         )}
-        <button
-          type="button"
-          className={styles.exportButton}
-          onClick={handleExport}
-          disabled={isExporting}
-        >
-          {isExporting ? "Exporting…" : "Export CSV"}
-        </button>
+        <div className={styles.actionButtons}>
+          {canEdit && (
+            <button type="button" className={styles.addButton} onClick={() => setFormTarget("new")}>
+              + Add sale
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.exportButton}
+            onClick={handleExport}
+            disabled={isExporting}
+          >
+            {isExporting ? "Exporting…" : "Export CSV"}
+          </button>
+        </div>
       </form>
       {exportError && <p className={styles.exportError}>{exportError}</p>}
+      {notice && (
+        <p
+          className={notice.kind === "error" ? styles.exportError : styles.successNotice}
+          role={notice.kind === "error" ? "alert" : "status"}
+        >
+          {notice.text}
+        </p>
+      )}
     </>
   );
+
+  const formModal =
+    formTarget !== null ? (
+      <TransactionFormModal
+        businessId={businessId}
+        transaction={formTarget === "new" ? null : formTarget}
+        branches={branches}
+        onClose={() => setFormTarget(null)}
+        onSaved={handleSaved}
+      />
+    ) : null;
 
   if (!isLoading && (!data || data.total === 0)) {
     return (
       <div>
         {filterBar}
+        {formModal}
         <div className={styles.empty}>
           {activeQuery ? (
             <>
@@ -222,7 +306,11 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
           ) : (
             <>
               <p className={styles.emptyTitle}>No transactions yet</p>
-              <p className={styles.emptyBody}>Upload a file above to see your sales history here.</p>
+              <p className={styles.emptyBody}>
+                {canEdit
+                  ? "Upload a file above, or add your first sale by hand."
+                  : "Upload a file above to see your sales history here."}
+              </p>
             </>
           )}
         </div>
@@ -235,6 +323,7 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
   return (
     <div className={styles.wrap}>
       {filterBar}
+      {formModal}
       {activeQuery && data && (
         <p className={styles.resultCount}>
           {data.total} {data.total === 1 ? "result" : "results"} for &ldquo;{activeQuery}&rdquo;
@@ -252,11 +341,12 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
               <th>Category</th>
               <th>Customer</th>
               <th>Payment Method</th>
+              {canEdit && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
             {isLoading || !data ? (
-              <SkeletonRows />
+              <SkeletonRows columns={canEdit ? 9 : 8} />
             ) : (
               data.items.map((t) => (
                 <tr key={t.id}>
@@ -268,6 +358,52 @@ export default function TransactionsTable({ businessId, refreshSignal, initialQu
                   <td>{t.category ?? "—"}</td>
                   <td>{t.customer ?? "—"}</td>
                   <td>{t.payment_method ?? "—"}</td>
+                  {canEdit && (
+                    <td>
+                      {confirmingDeleteId === t.id ? (
+                        <div className={styles.rowActions}>
+                          <button
+                            type="button"
+                            className={styles.confirmDeleteButton}
+                            onClick={() => handleDelete(t)}
+                            disabled={deletingId === t.id}
+                          >
+                            {deletingId === t.id ? "Deleting…" : "Confirm delete"}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.rowButton}
+                            onClick={() => setConfirmingDeleteId(null)}
+                            disabled={deletingId === t.id}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className={styles.rowActions}>
+                          <button
+                            type="button"
+                            className={styles.rowButton}
+                            onClick={() => {
+                              setConfirmingDeleteId(null);
+                              setFormTarget(t);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              className={styles.rowDeleteButton}
+                              onClick={() => setConfirmingDeleteId(t.id)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))
             )}
