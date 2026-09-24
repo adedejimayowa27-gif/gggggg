@@ -32,6 +32,7 @@ from app.models.business import Business
 from app.models.transaction import Transaction
 from app.models.simulation import Simulation
 from app.models.alert import Alert
+from app.services.expenses import expense_filters, expense_total, expenses_by_category
 from app.services.analytics import (
     BREAKDOWN_UNSET_LABELS,
     BreakdownField,
@@ -157,6 +158,11 @@ def get_profit(db: Session, business: Business, start_date: date, end_date: date
     gross_profit = revenue - total_cost
     profit_margin = (gross_profit / revenue * 100) if revenue > 0 else Decimal(0)
 
+    # Step 13, Batch 2: operating expenses recorded for the same range, and
+    # the net profit left after them.
+    operating_expenses, expense_count = expense_total(db, *expense_filters(business.id, start_date, end_date))
+    net_profit = gross_profit - operating_expenses
+
     result = {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
@@ -164,16 +170,28 @@ def get_profit(db: Session, business: Business, start_date: date, end_date: date
         "total_cost": _to_float(total_cost),
         "gross_profit": _to_float(gross_profit),
         "profit_margin": _to_float(profit_margin),
+        "operating_expenses": _to_float(operating_expenses),
+        "net_profit": _to_float(net_profit),
+        "expense_count": expense_count,
+        "has_expense_data": expense_count > 0,
         "transaction_count": row.transaction_count,
         "has_data": row.transaction_count > 0,
     }
     if row.transaction_count == 0:
         result["note"] = "No transactions found for this business in this date range."
+    if expense_count == 0:
+        result["expense_note"] = (
+            "No operating expenses were recorded for this date range, so net_profit equals "
+            "gross_profit and probably overstates what the business really made."
+        )
     return result
 
 
 def get_expenses(db: Session, business: Business, start_date: date, end_date: date) -> dict:
     """Total cost of goods sold (quantity * cost_price) for [start_date, end_date].
+
+    This is what the products cost -- NOT running costs like rent or
+    salaries; those come from `get_operating_expenses`.
 
     Includes `transaction_count`/`has_data`/`note` for the same
     insufficient-data reason as `get_revenue` -- see that function's
@@ -199,6 +217,44 @@ def get_expenses(db: Session, business: Business, start_date: date, end_date: da
     }
     if row.transaction_count == 0:
         result["note"] = "No transactions found for this business in this date range."
+    return result
+
+
+def get_operating_expenses(
+    db: Session, business: Business, start_date: date, end_date: date, limit: int = 8
+) -> dict:
+    """Operating expenses (rent, salaries, transport, ...) the owner recorded
+    for [start_date, end_date], with the largest categories first.
+
+    Distinct from `get_expenses`, which is the cost of the goods sold.
+    `has_data` is false when nothing was recorded in range -- like the other
+    tools, that means "no records", not "the business spent nothing".
+    """
+    _validate_range(start_date, end_date)
+    _validate_limit(limit)
+
+    filters = expense_filters(business.id, start_date, end_date)
+    total, count = expense_total(db, *filters)
+    categories = expenses_by_category(db, *filters)
+
+    result = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "total_operating_expenses": _to_float(total),
+        "expense_count": count,
+        "categories": [
+            {
+                "category": c["category"],
+                "total": _to_float(c["total"]),
+                "share_percent": _to_float(c["total"] / total * 100) if total > 0 else 0.0,
+                "count": c["count"],
+            }
+            for c in categories[:limit]
+        ],
+        "has_data": count > 0,
+    }
+    if count == 0:
+        result["note"] = "No operating expenses were recorded for this business in this date range."
     return result
 
 
