@@ -221,6 +221,7 @@ def export_account_data(db: Session, user: User) -> dict:
             "email": user.email,
             "full_name": user.full_name,
             "is_email_verified": user.is_email_verified,
+            "is_2fa_enabled": user.is_2fa_enabled,
             "created_at": user.created_at.isoformat(),
         },
         "businesses_you_own": businesses_export,
