@@ -41,7 +41,7 @@ import {
 import { useRouter } from "next/navigation";
 import { apiFetch, ApiError } from "@/lib/api";
 import { msUntilExpiry } from "@/lib/jwt";
-import type { AuthResponse, User } from "@/types";
+import type { AuthResponse, TwoFactorChallenge, User } from "@/types";
 
 const TOKEN_STORAGE_KEY = "bizintel_token";
 const REFRESH_TOKEN_STORAGE_KEY = "bizintel_refresh_token";
@@ -59,7 +59,15 @@ interface AuthContextValue {
   token: string | null;
   isLoading: boolean;
   signup: (email: string, password: string, fullName?: string) => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  // Batch 12.6: resolves to { twoFactorRequired: true, challengeToken }
+  // instead of logging in directly when the account has 2FA enabled --
+  // the caller (app/login/page.tsx) is responsible for then prompting
+  // for a code and calling verifyTwoFactorLogin with it.
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ twoFactorRequired: false } | { twoFactorRequired: true; challengeToken: string }>;
+  verifyTwoFactorLogin: (challengeToken: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Batch 12.2: re-fetches /auth/me, e.g. right after the user confirms
    * their email on the verify-email page, so the banner clears without
@@ -208,9 +216,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const data = await apiFetch<AuthResponse>("/auth/login", {
+      // POST /auth/login returns either a normal AuthResponse or, when
+      // the account has 2FA enabled, a TwoFactorChallenge instead --
+      // see that type's comment. Neither shape is an error, so this
+      // isn't a try/catch: a wrong password is still a thrown ApiError,
+      // same as before.
+      const data = await apiFetch<AuthResponse | TwoFactorChallenge>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
+      });
+      if ("two_factor_required" in data) {
+        return { twoFactorRequired: true as const, challengeToken: data.challenge_token };
+      }
+      applyAuthResponse(data);
+      return { twoFactorRequired: false as const };
+    },
+    [applyAuthResponse]
+  );
+
+  const verifyTwoFactorLogin = useCallback(
+    async (challengeToken: string, code: string) => {
+      const data = await apiFetch<AuthResponse>("/auth/2fa/verify-login", {
+        method: "POST",
+        body: JSON.stringify({ challenge_token: challengeToken, code }),
       });
       applyAuthResponse(data);
     },
@@ -257,7 +285,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => clearScheduledRefresh, [clearScheduledRefresh]);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, signup, login, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, token, isLoading, signup, login, verifyTwoFactorLogin, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );
