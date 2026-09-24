@@ -192,6 +192,14 @@ export default function OverviewPage() {
     summary && previousSummary
       ? percentChange(Number(summary.gross_profit), Number(previousSummary.gross_profit))
       : null;
+  // Operating expenses / net profit (Batch 2). Guarded so an API that
+  // predates them leaves the cards empty rather than showing NaN.
+  const hasNetProfit = !!summary && summary.net_profit !== undefined;
+  const netProfitChange =
+    summary && previousSummary && summary.net_profit !== undefined && previousSummary.net_profit !== undefined
+      ? percentChange(Number(summary.net_profit), Number(previousSummary.net_profit))
+      : null;
+  const noExpensesRecorded = hasNetProfit && summary?.expense_count === 0;
   const marginChange =
     summary && previousSummary ? Number(summary.profit_margin) - Number(previousSummary.profit_margin) : null;
   const transactionsChange =
@@ -290,6 +298,28 @@ export default function OverviewPage() {
           changeLabel="vs previous period"
           sparklineValues={sparklines.profit}
           detailsHref="/dashboard/analytics"
+        />
+        <MetricCard
+          label="Operating Expenses"
+          icon="average"
+          accent="blue"
+          isLoading={isLoadingSummary}
+          isEmpty={!hasData || !hasNetProfit}
+          emptyText={emptyText}
+          value={summary?.operating_expenses !== undefined ? formatCurrency(summary.operating_expenses) : undefined}
+          detailsHref="/dashboard/expenses"
+        />
+        <MetricCard
+          label="Net Profit"
+          icon="profit"
+          accent="leaf"
+          isLoading={isLoadingSummary}
+          isEmpty={!hasData || !hasNetProfit}
+          emptyText={emptyText}
+          value={summary?.net_profit !== undefined ? formatCurrency(summary.net_profit) : undefined}
+          changePercent={netProfitChange}
+          changeLabel={noExpensesRecorded ? "no expenses recorded yet" : "vs previous period"}
+          detailsHref="/dashboard/expenses"
         />
         <MetricCard
           label="Profit Margin"
