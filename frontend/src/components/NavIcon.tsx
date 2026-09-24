@@ -11,6 +11,7 @@
 export type NavIconName =
   | "overview"
   | "transactions"
+  | "expenses"
   | "products"
   | "analytics"
   | "ai"
@@ -41,6 +42,14 @@ function IconShape({ name }: { name: NavIconName }) {
           <path d="M6 10H17" />
           <circle cx="3.5" cy="15" r="1" fill="currentColor" stroke="none" />
           <path d="M6 15H17" />
+        </>
+      );
+    case "expenses":
+      // A receipt with a torn bottom edge and two lines of items.
+      return (
+        <>
+          <path d="M5 2.5H15V17.5L12.5 16L10 17.5L7.5 16L5 17.5Z" strokeLinejoin="round" />
+          <path d="M8 7H12M8 10.5H12" />
         </>
       );
     case "products":
