@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
 import { deleteMyAccount, exportMyData } from "@/lib/account";
+import TwoFactorSettings from "@/components/TwoFactorSettings";
 import styles from "./account.module.css";
 
 export default function AccountPage() {
@@ -100,6 +101,8 @@ export default function AccountPage() {
         </div>
         {exportError && <p className={styles.error}>{exportError}</p>}
       </div>
+
+      <TwoFactorSettings />
 
       <div className={styles.dangerCard}>
         <h2 className={styles.cardTitle}>Delete your account</h2>
