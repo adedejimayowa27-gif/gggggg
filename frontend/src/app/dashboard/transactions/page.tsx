@@ -21,6 +21,10 @@ function TransactionsPageContent() {
   // Batch 12.4: importing needs the "member" role; viewers can still browse
   // every transaction and the import history.
   const canImport = hasRole(currentUserRole, "member");
+  // Batch 13.1: adding and correcting a sale by hand is also "member" work;
+  // deleting one needs "admin".
+  const canEdit = hasRole(currentUserRole, "member");
+  const canDelete = hasRole(currentUserRole, "admin");
   const [refreshSignal, setRefreshSignal] = useState(0);
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q") ?? undefined;
@@ -52,7 +56,7 @@ function TransactionsPageContent() {
         ) : (
           currentUserRole !== null && (
             <p className={styles.muted}>
-              Your role can view transactions but not import them. Ask an admin if you need to add data.
+              Your role can view transactions but not add or import them. Ask an admin if you need to add data.
             </p>
           )
         )}
@@ -65,7 +69,13 @@ function TransactionsPageContent() {
 
       <div>
         <h2 className={styles.sectionTitle}>All Transactions</h2>
-        <TransactionsTable businessId={primaryBusiness.id} refreshSignal={refreshSignal} initialQuery={initialQuery} />
+        <TransactionsTable
+          businessId={primaryBusiness.id}
+          refreshSignal={refreshSignal}
+          initialQuery={initialQuery}
+          canEdit={canEdit}
+          canDelete={canDelete}
+        />
       </div>
     </div>
   );
