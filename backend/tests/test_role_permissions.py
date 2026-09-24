@@ -44,11 +44,11 @@ from app.models.team_member import ROLE_ORDER, TeamMember
 #
 #   viewer  read everything the business shows, plus tools that change nothing
 #           (what-if preview, AI assistant, chat history)
-#   member  + day-to-day work: import data, add or correct a transaction by
-#           hand, run syncs, manage alerts, save or delete simulations, add or
-#           edit branches
+#   member  + day-to-day work: import data, add or correct a transaction or
+#           expense by hand, run syncs, manage alerts, save or delete
+#           simulations, add or edit branches
 #   admin   + set up integrations, manage the team, delete branches, delete
-#           transactions, audit log, start a plan upgrade
+#           transactions and expenses, audit log, start a plan upgrade
 #   owner   (the business's creator; nothing is owner-only yet, the role
 #           exists so it can be, e.g. deleting the business)
 # --------------------------------------------------------------------------
@@ -74,6 +74,9 @@ _declare(
     ("GET", f"{B}/transactions"),
     ("GET", f"{B}/transactions/export"),
     ("GET", f"{B}/transactions/field-values"),
+    ("GET", f"{B}/expenses"),
+    ("GET", f"{B}/expenses/summary"),
+    ("GET", f"{B}/expenses/categories"),
     ("GET", f"{B}/alerts"),
     ("GET", f"{B}/alerts/{{alert_id}}"),
     ("GET", f"{B}/imports"),
@@ -100,6 +103,8 @@ _declare(
     ("POST", f"{B}/imports/{{import_id}}/confirm"),
     ("POST", f"{B}/transactions"),
     ("PATCH", f"{B}/transactions/{{transaction_id}}"),
+    ("POST", f"{B}/expenses"),
+    ("PATCH", f"{B}/expenses/{{expense_id}}"),
     ("POST", f"{B}/alerts/run"),
     ("PATCH", f"{B}/alerts/{{alert_id}}"),
     ("POST", f"{B}/simulations"),
@@ -114,6 +119,7 @@ _declare(
     "admin",
     ("DELETE", f"{B}/branches/{{branch_id}}"),
     ("DELETE", f"{B}/transactions/{{transaction_id}}"),
+    ("DELETE", f"{B}/expenses/{{expense_id}}"),
     ("POST", f"{B}/team"),
     ("PATCH", f"{B}/team/{{member_id}}"),
     ("DELETE", f"{B}/team/{{member_id}}"),
@@ -300,6 +306,8 @@ _CSV = b"date,product,quantity,selling_price\n2026-01-05,Widget,1,10.00\n"
 BEHAVIOR_CASES = [
     ("view analytics", "GET", "/analytics/summary", "viewer", {}),
     ("list transactions", "GET", "/transactions", "viewer", {}),
+    ("list expenses", "GET", "/expenses", "viewer", {}),
+    ("expense summary", "GET", "/expenses/summary", "viewer", {}),
     ("list alerts", "GET", "/alerts", "viewer", {}),
     ("list branches", "GET", "/branches", "viewer", {}),
     ("what-if preview", "POST", "/simulate", "viewer", {"json": {}}),
@@ -308,6 +316,8 @@ BEHAVIOR_CASES = [
      {"files": {"file": ("sales.csv", io.BytesIO(_CSV), "text/csv")}}),
     ("add a transaction", "POST", "/transactions", "member", {"json": {}}),
     ("edit a transaction", "PATCH", f"/transactions/{_ANY_ID}", "member", {"json": {}}),
+    ("add an expense", "POST", "/expenses", "member", {"json": {}}),
+    ("edit an expense", "PATCH", f"/expenses/{_ANY_ID}", "member", {"json": {}}),
     ("run alert detection", "POST", "/alerts/run", "member", {}),
     ("update an alert", "PATCH", f"/alerts/{_ANY_ID}", "member", {"json": {"status": "read"}}),
     ("save a simulation", "POST", "/simulations", "member", {"json": {}}),
@@ -318,6 +328,7 @@ BEHAVIOR_CASES = [
     ("sync Excel", "POST", "/microsoft/sync", "member", {}),
     ("delete a branch", "DELETE", f"/branches/{_ANY_ID}", "admin", {}),
     ("delete a transaction", "DELETE", f"/transactions/{_ANY_ID}", "admin", {}),
+    ("delete an expense", "DELETE", f"/expenses/{_ANY_ID}", "admin", {}),
     ("invite a teammate", "POST", "/team", "admin", {"json": {}}),
     ("read the audit log", "GET", "/audit-logs", "admin", {}),
     ("start a plan upgrade", "POST", "/billing/checkout", "admin", {"json": {}}),
