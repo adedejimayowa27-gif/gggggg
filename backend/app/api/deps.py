@@ -12,7 +12,7 @@ from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundError, UnauthorizedError
+from app.core.exceptions import NotFoundError, UnauthorizedError, ValidationError
 from app.core.logging_config import business_id_var, request_id_var, user_id_var
 from app.core.monitoring import set_request_context
 from app.core.security import decode_access_token
@@ -24,6 +24,7 @@ from app.models.alert import Alert
 from app.models.google_integration import GoogleIntegration
 from app.models.microsoft_integration import MicrosoftIntegration
 from app.models.branch import Branch
+from app.models.expense import Expense
 from app.models.transaction import Transaction
 from app.models.team_member import ROLE_ORDER, TeamMember
 from app.models.user import User
@@ -287,3 +288,26 @@ def get_owned_transaction(transaction_id: uuid.UUID, business: Business, db: Ses
     if not transaction:
         raise NotFoundError("Transaction not found.")
     return transaction
+
+
+def get_owned_expense(expense_id: uuid.UUID, business: Business, db: Session) -> Expense:
+    """Fetch an expense scoped to an already-ownership-checked business."""
+    expense = (
+        db.query(Expense).filter(Expense.id == expense_id, Expense.business_id == business.id).first()
+    )
+    if not expense:
+        raise NotFoundError("Expense not found.")
+    return expense
+
+
+def ensure_branch_belongs_to_business(db: Session, business: Business, branch_id: uuid.UUID | None) -> None:
+    """
+    For a write that names a branch (a transaction or expense being
+    attributed to one): reject a branch that isn't this business's. None
+    is fine -- "no branch" is always allowed.
+    """
+    if branch_id is None:
+        return
+    exists = db.query(Branch.id).filter(Branch.id == branch_id, Branch.business_id == business.id).first()
+    if not exists:
+        raise ValidationError("That branch does not belong to this business.", code="invalid_branch")
