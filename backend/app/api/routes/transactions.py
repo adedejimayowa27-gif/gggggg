@@ -8,19 +8,26 @@ business's transactions even if a user guesses an ID.
 import csv
 import io
 import uuid
+from decimal import Decimal
 from enum import Enum
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Query as SAQuery, Session
 
-from app.api.deps import get_owned_business
+from app.api.deps import get_current_user, get_owned_business, get_owned_transaction, require_business_role
+from app.core.exceptions import ValidationError
 from app.db.session import get_db
 from app.models.branch import Branch
 from app.models.business import Business
 from app.models.transaction import Transaction
-from app.schemas.transaction import PaginatedTransactions, TransactionOut
+from app.models.user import User
+from app.schemas.transaction import PaginatedTransactions, TransactionCreate, TransactionOut, TransactionUpdate
+from app.services.audit import client_ip, log_action
+from app.services.billing import check_max_transactions_this_month
+from app.services.import_pipeline import compute_fingerprint
+from app.services.transactions import remember_imported_fingerprint
 
 router = APIRouter(prefix="/businesses/{business_id}/transactions", tags=["transactions"])
 
@@ -200,4 +207,154 @@ def list_transactions(
         total=total,
         page=page,
         page_size=page_size,
+    )
+
+
+# --- Manual entry, editing and deleting (Step 13, Batch 1) -------------------
+#
+# Roles: adding and correcting a sale is day-to-day work ("member"); deleting
+# one removes it from every report, so it needs "admin". Both are audit-logged.
+
+# The fields that identify a sale for duplicate detection (see
+# import_pipeline.compute_fingerprint). Changing any of them changes the
+# transaction's fingerprint.
+_FINGERPRINT_FIELDS = ("date", "product", "quantity", "selling_price", "cost_price")
+
+
+def _ensure_branch_belongs_to_business(db: Session, business: Business, branch_id: uuid.UUID | None) -> None:
+    if branch_id is None:
+        return
+    exists = (
+        db.query(Branch.id).filter(Branch.id == branch_id, Branch.business_id == business.id).first()
+    )
+    if not exists:
+        raise ValidationError("That branch does not belong to this business.", code="invalid_branch")
+
+
+def _canonical(value: Decimal | None) -> Decimal | None:
+    """Drop trailing zeros (2.500 -> 2.5, 10.00 -> 10) so the fingerprint
+    reads the way a spreadsheet cell would, whether the number was typed
+    here or read back from the database's fixed-precision column."""
+    if value is None:
+        return None
+    return Decimal(format(value.normalize(), "f"))
+
+
+def _fingerprint_for(transaction: Transaction) -> str:
+    row = {field: getattr(transaction, field) for field in _FINGERPRINT_FIELDS}
+    for field in ("quantity", "selling_price", "cost_price"):
+        row[field] = _canonical(row[field])
+    return compute_fingerprint(str(transaction.business_id), row)
+
+
+@router.post("", response_model=TransactionOut, status_code=status.HTTP_201_CREATED)
+def create_transaction(
+    payload: TransactionCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(require_business_role("member")),
+):
+    """
+    Records one sale by hand. Counts toward the plan's monthly transaction
+    limit exactly like an imported row. Two genuinely separate sales of the
+    same product, quantity and price on the same day are both allowed --
+    unlike an import, a person typing a sale in means it.
+    """
+    check_max_transactions_this_month(db, business)
+    _ensure_branch_belongs_to_business(db, business, payload.branch_id)
+
+    transaction = Transaction(
+        id=uuid.uuid4(),
+        business_id=business.id,
+        import_session_id=None,
+        **payload.model_dump(),
+    )
+    transaction.fingerprint = _fingerprint_for(transaction)
+    db.add(transaction)
+    db.commit()
+    db.refresh(transaction)
+
+    log_action(
+        db, "transaction.created", business_id=business.id, actor_user_id=current_user.id,
+        target_type="transaction", target_id=str(transaction.id),
+        details={"product": transaction.product, "date": transaction.date.isoformat()},
+        ip_address=client_ip(request),
+    )
+    return TransactionOut.model_validate(transaction)
+
+
+@router.patch("/{transaction_id}", response_model=TransactionOut)
+def update_transaction(
+    transaction_id: uuid.UUID,
+    payload: TransactionUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(require_business_role("member")),
+):
+    """
+    Changes only the fields that were sent. Works on imported rows too. If
+    the edit changes what identifies the sale (date, product, quantity or
+    price), the original source row is remembered so the next sync or
+    re-upload does not insert it again next to the corrected one.
+    """
+    transaction = get_owned_transaction(transaction_id, business, db)
+    changes = {field: getattr(payload, field) for field in payload.model_fields_set}
+
+    if "branch_id" in changes:
+        _ensure_branch_belongs_to_business(db, business, changes["branch_id"])
+
+    changed_fields = [f for f, value in changes.items() if getattr(transaction, f) != value]
+    if not changed_fields:
+        return TransactionOut.model_validate(transaction)
+
+    for field in changed_fields:
+        setattr(transaction, field, changes[field])
+
+    if any(f in _FINGERPRINT_FIELDS for f in changed_fields):
+        remember_imported_fingerprint(db, transaction)  # tombstones the OLD fingerprint
+        transaction.fingerprint = _fingerprint_for(transaction)
+
+    db.commit()
+    db.refresh(transaction)
+
+    log_action(
+        db, "transaction.updated", business_id=business.id, actor_user_id=current_user.id,
+        target_type="transaction", target_id=str(transaction.id),
+        details={"product": transaction.product, "fields": sorted(changed_fields)},
+        ip_address=client_ip(request),
+    )
+    return TransactionOut.model_validate(transaction)
+
+
+@router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_transaction(
+    transaction_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(require_business_role("admin")),
+):
+    """
+    Permanently removes one transaction. If it came from an import or sync,
+    its source row is remembered so it is not brought back by the next
+    sync. Any alert that pointed at it is kept (its link is just cleared).
+    """
+    transaction = get_owned_transaction(transaction_id, business, db)
+    details = {
+        "product": transaction.product,
+        "date": transaction.date.isoformat(),
+        "quantity": str(transaction.quantity),
+        "selling_price": str(transaction.selling_price),
+        "was_imported": transaction.import_session_id is not None,
+    }
+    remember_imported_fingerprint(db, transaction)
+    db.delete(transaction)
+    db.commit()
+
+    log_action(
+        db, "transaction.deleted", business_id=business.id, actor_user_id=current_user.id,
+        target_type="transaction", target_id=str(transaction_id),
+        details=details, ip_address=client_ip(request),
     )
