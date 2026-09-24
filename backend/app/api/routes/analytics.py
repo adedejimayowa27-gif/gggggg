@@ -30,6 +30,7 @@ from app.schemas.analytics import (
     ProductAnalyticsItem,
     TimeseriesPoint,
 )
+from app.services.expenses import expense_filters, expense_total
 from app.services.analytics import (
     BREAKDOWN_UNSET_LABELS,
     BreakdownField,
@@ -83,6 +84,15 @@ def get_analytics_summary(
         (revenue / transaction_count) if transaction_count > 0 else Decimal(0)
     )
 
+    # Operating expenses for the same window (and branch, if one is chosen:
+    # expenses with no branch are shared overhead, so they appear in the
+    # whole-business view but not in a single branch's).
+    operating_expenses, expense_count = expense_total(
+        db, *expense_filters(business.id, resolved_start, resolved_end, branch_id=branch_id)
+    )
+    net_profit = gross_profit - operating_expenses
+    net_profit_margin = (net_profit / revenue * 100) if revenue > 0 else Decimal(0)
+
     return AnalyticsSummary(
         start_date=resolved_start,
         end_date=resolved_end,
@@ -93,6 +103,10 @@ def get_analytics_summary(
         units_sold=units_sold,
         transaction_count=transaction_count,
         average_transaction_value=average_transaction_value,
+        operating_expenses=operating_expenses,
+        expense_count=expense_count,
+        net_profit=net_profit,
+        net_profit_margin=net_profit_margin,
     )
 
 
