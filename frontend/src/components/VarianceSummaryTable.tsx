@@ -34,6 +34,9 @@ interface Row {
   current: number;
   previous: number;
   format: "currency" | "number" | "percentPoints";
+  /** A cost: going UP is the bad direction, so the change is coloured
+   * red when it rises and green when it falls (the reverse of revenue). */
+  higherIsWorse?: boolean;
 }
 
 function formatValue(value: number, format: Row["format"]): string {
@@ -57,6 +60,25 @@ function buildRows(summary: AnalyticsSummary, previous: AnalyticsSummary): Row[]
       previous: Number(previous.profit_margin),
       format: "percentPoints",
     },
+    // Operating expenses and net profit come from the same summary; hidden
+    // against an API that predates them rather than showing NaN.
+    ...(summary.net_profit !== undefined && previous.net_profit !== undefined
+      ? [
+          {
+            label: "Operating expenses",
+            current: Number(summary.operating_expenses ?? 0),
+            previous: Number(previous.operating_expenses ?? 0),
+            format: "currency" as const,
+            higherIsWorse: true,
+          },
+          {
+            label: "Net profit",
+            current: Number(summary.net_profit),
+            previous: Number(previous.net_profit),
+            format: "currency" as const,
+          },
+        ]
+      : []),
     {
       label: "Avg. transaction value",
       current: Number(summary.average_transaction_value),
@@ -122,8 +144,11 @@ export default function VarianceSummaryTable({ summary, previousSummary, isLoadi
                 const delta = isMargin ? row.current - row.previous : null;
                 const pctChange = isMargin ? null : percentChange(row.current, row.previous);
                 const changeValue = isMargin ? delta : pctChange;
-                const isPositive = (changeValue ?? 0) > 0;
-                const isNegative = (changeValue ?? 0) < 0;
+                const rising = (changeValue ?? 0) > 0;
+                const falling = (changeValue ?? 0) < 0;
+                // For a cost, rising is the bad direction.
+                const isPositive = row.higherIsWorse ? falling : rising;
+                const isNegative = row.higherIsWorse ? rising : falling;
                 return (
                   <tr key={row.label}>
                     <td className={styles.metricCell}>{row.label}</td>
@@ -138,7 +163,7 @@ export default function VarianceSummaryTable({ summary, previousSummary, isLoadi
                             isPositive ? styles.changePositive : isNegative ? styles.changeNegative : styles.changeNeutral
                           }
                         >
-                          {isPositive ? "▲" : isNegative ? "▼" : "–"}{" "}
+                          {rising ? "▲" : falling ? "▼" : "–"}{" "}
                           {numberFormatter.format(Math.abs(changeValue))}
                           {isMargin ? "pp" : "%"}
                         </span>
