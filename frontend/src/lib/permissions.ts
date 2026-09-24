@@ -6,9 +6,10 @@
  * docs/API.md, "Roles and permissions":
  *
  *   viewer  read-only (plus the what-if preview and the AI assistant)
- *   member  + import data, run syncs, manage alerts, save/delete simulations,
- *           add/edit branches
- *   admin   + set up integrations, manage the team, delete branches, billing
+ *   member  + import data, add/edit transactions, run syncs, manage alerts,
+ *           save/delete simulations, add/edit branches
+ *   admin   + set up integrations, manage the team, delete branches,
+ *           delete transactions, billing
  *   owner   everything
  *
  * Hiding a button here is a convenience so people aren't shown actions they
