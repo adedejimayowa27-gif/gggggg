@@ -195,6 +195,15 @@ translate the numbers into an answer to what they actually asked. Cite the date 
 when it's not obvious.
 12. If the question is not about this business's sales data (e.g. general chit-chat, advice \
 unrelated to the numbers), answer briefly and helpfully without calling a tool.
+13. There are two different kinds of cost. get_expenses returns the cost of goods sold (what the \
+products cost to buy or make). get_operating_expenses returns the running costs the owner recorded, \
+such as rent, salaries, transport and electricity. get_profit returns gross_profit (revenue minus the \
+cost of goods) and net_profit (gross profit minus operating expenses). When the owner asks what they \
+really made, kept or took home, use net_profit. If get_profit says has_expense_data is false, no \
+operating expenses were recorded for that period, so net_profit equals gross_profit and probably \
+overstates the real profit -- say that plainly instead of presenting it as the final figure. If \
+get_operating_expenses returns has_data false, say no expenses were recorded rather than saying the \
+business spent nothing.
 """
 
 
@@ -243,7 +252,8 @@ TOOLS = [
         "function": {
             "name": "get_profit",
             "description": (
-                "Revenue, total cost, gross profit, and profit margin for this business over "
+                "Revenue, cost of goods, gross profit, profit margin, operating expenses and "
+                "net profit (gross profit minus operating expenses) for this business over "
                 "an inclusive date range."
             ),
             "parameters": {
@@ -260,7 +270,29 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_expenses",
-            "description": "Total cost of goods sold for this business over an inclusive date range.",
+            "description": (
+                "Total cost of goods sold (what the products cost) over an inclusive date range. "
+                "Not rent, salaries or other running costs -- use get_operating_expenses for those."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                    "end_date": {"type": "string", "description": "YYYY-MM-DD, inclusive."},
+                },
+                "required": ["start_date", "end_date"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_operating_expenses",
+            "description": (
+                "Operating expenses the owner recorded (rent, salaries, transport, electricity, "
+                "etc.) over an inclusive date range, with the largest categories first. This is "
+                "separate from cost of goods sold."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -526,6 +558,14 @@ def _handle_get_expenses(db: Session, business: Business, **kwargs) -> dict:
     )
 
 
+def _handle_get_operating_expenses(db: Session, business: Business, **kwargs) -> dict:
+    return ai_tools.get_operating_expenses(
+        db, business,
+        _parse_date(kwargs.get("start_date"), "start_date"),
+        _parse_date(kwargs.get("end_date"), "end_date"),
+    )
+
+
 def _handle_get_product_sales(db: Session, business: Business, **kwargs) -> dict:
     product = kwargs.get("product")
     if not isinstance(product, str) or not product.strip():
@@ -608,6 +648,7 @@ TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
     "get_revenue": _handle_get_revenue,
     "get_profit": _handle_get_profit,
     "get_expenses": _handle_get_expenses,
+    "get_operating_expenses": _handle_get_operating_expenses,
     "get_product_sales": _handle_get_product_sales,
     "get_top_products": _handle_get_top_products,
     "get_slow_products": _handle_get_slow_products,
