@@ -4,8 +4,83 @@
 
 .searchRow {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.85rem;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.addButton {
+  padding: 0.55rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gold);
+  background: transparent;
+  color: var(--gold);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.addButton:hover {
+  background: var(--gold);
+  color: #14151a;
+}
+
+.successNotice {
+  color: var(--leaf);
+  font-size: 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.rowActions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.rowButton,
+.rowDeleteButton,
+.confirmDeleteButton {
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-border);
+  background: transparent;
+  color: var(--paper);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rowButton:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.rowDeleteButton {
+  color: var(--clay);
+}
+
+.rowDeleteButton:hover {
+  border-color: var(--clay);
+}
+
+.confirmDeleteButton {
+  border-color: var(--clay);
+  background: var(--clay);
+  color: #fff;
+}
+
+.confirmDeleteButton:hover:not(:disabled) {
+  background: var(--clay-deep);
+}
+
+.rowButton:disabled,
+.confirmDeleteButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .searchInput {
@@ -58,7 +133,6 @@
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
-  margin-left: auto;
 }
 
 .exportButton:hover:not(:disabled) {
