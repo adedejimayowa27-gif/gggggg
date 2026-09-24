@@ -144,6 +144,13 @@ export interface AnalyticsSummary {
   units_sold: string;
   transaction_count: number;
   average_transaction_value: string;
+  // Step 13, Batch 2 (operating expenses). Optional so a frontend deployed a
+  // moment before its backend doesn't render "NaN" -- the cards below simply
+  // stay in their empty state until the API returns them.
+  operating_expenses?: string;
+  expense_count?: number;
+  net_profit?: string;
+  net_profit_margin?: string;
 }
 
 export interface TimeseriesPoint {
@@ -519,4 +526,39 @@ export interface AuditLogEntry {
   details: Record<string, unknown>;
   ip_address: string | null;
   created_at: string;
+}
+
+// --- Operating expenses (Step 13, Batch 2) ---------------------------------
+
+export interface Expense {
+  id: string;
+  business_id: string;
+  date: string; // YYYY-MM-DD
+  category: string;
+  amount: string;
+  description: string | null;
+  branch_id: string | null;
+  created_at: string;
+}
+
+export interface PaginatedExpenses {
+  items: Expense[];
+  total: number;
+  page: number;
+  page_size: number;
+  /** Sum across every expense matching the filters, not just this page. */
+  total_amount: string;
+}
+
+export interface ExpenseCategoryTotal {
+  category: string;
+  total: string;
+  count: number;
+  share_percent: string;
+}
+
+export interface ExpenseSummary {
+  total: string;
+  count: number;
+  by_category: ExpenseCategoryTotal[];
 }
