@@ -30,6 +30,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Overview", href: "/dashboard", icon: "overview" },
       { label: "Transactions", href: "/dashboard/transactions", icon: "transactions" },
+      { label: "Expenses", href: "/dashboard/expenses", icon: "expenses" },
       { label: "Products", href: "/dashboard/products", icon: "products" },
       { label: "Analytics", href: "/dashboard/analytics", icon: "analytics" },
     ],
