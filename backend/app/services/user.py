@@ -34,6 +34,7 @@ from app.models.google_integration import GoogleIntegration
 from app.models.microsoft_integration import MicrosoftIntegration
 from app.models.subscription import Subscription
 from app.models.team_member import TeamMember
+from app.models.expense import Expense
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.services.audit import log_action
@@ -157,6 +158,13 @@ def export_account_data(db: Session, user: User) -> dict:
         .all()
     ) if owned_business_ids else {}
 
+    expense_counts = dict(
+        db.query(Expense.business_id, sa_func.count(Expense.id))
+        .filter(Expense.business_id.in_(owned_business_ids))
+        .group_by(Expense.business_id)
+        .all()
+    ) if owned_business_ids else {}
+
     google_by_business = {
         g.business_id: g
         for g in db.query(GoogleIntegration).filter(GoogleIntegration.business_id.in_(owned_business_ids))
@@ -183,6 +191,7 @@ def export_account_data(db: Session, user: User) -> dict:
                 "industry": business.industry,
                 "created_at": business.created_at.isoformat(),
                 "transaction_count": transaction_counts.get(business.id, 0),
+                "expense_count": expense_counts.get(business.id, 0),
                 "transactions_export_url": f"/businesses/{business.id}/transactions/export",
                 "subscription_plan_id": str(subscription.plan_id) if subscription else None,
                 "subscription_status": subscription.status if subscription else None,
