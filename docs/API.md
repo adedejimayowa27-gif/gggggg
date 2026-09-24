@@ -46,6 +46,42 @@ as theft and revokes its entire session, not just that one token -- see
 `app/models/refresh_token.py` and the `/auth/refresh` route's docstring
 for the full mechanism.
 
+### Two-factor login (Batch 12.6)
+
+TOTP-based, using any standard authenticator app (Google Authenticator,
+1Password, Authy, etc.):
+
+- `POST /auth/2fa/setup` (authenticated) generates a new secret, returns
+  it as `{ secret, otpauth_url, qr_code_svg }`. This does NOT enable
+  2FA yet -- it's a pending enrollment until confirmed below. Calling
+  it again before confirming replaces the pending secret; it can't be
+  called at all while 2FA is already enabled (`409` -- disable first).
+- `POST /auth/2fa/enable { "code": "123456" }` (authenticated) confirms
+  the code matches the pending secret from setup, flips
+  `is_2fa_enabled` to true, and returns `{ recovery_codes: [...] }` --
+  8 one-time codes, shown exactly once, never retrievable again.
+- With 2FA enabled, `POST /auth/login` no longer returns tokens
+  directly: after the password checks out, it returns
+  `{ two_factor_required: true, challenge_token }` instead. Redeem that
+  at `POST /auth/2fa/verify-login { "challenge_token", "code" }`, which
+  accepts either a live TOTP code or one of the recovery codes (a
+  recovery code is consumed -- removed from the account -- on use), and
+  returns a normal token response. The challenge token alone grants no
+  access; it only proves the password was correct a few minutes ago
+  (`TWO_FACTOR_CHALLENGE_EXPIRE_MINUTES`, default 10).
+- `POST /auth/2fa/disable { "password", "code" }` and
+  `POST /auth/2fa/recovery-codes { "password", "code" }` (regenerates
+  the recovery-code set) both require the current password AND a
+  current code (TOTP or recovery) -- proof of both factors, not just an
+  active session, before touching 2FA settings.
+- `GET /auth/me` and the data export now include `is_2fa_enabled`; the
+  encrypted secret and recovery-code hashes are never exposed by any
+  endpoint.
+
+Requires `TOTP_ENCRYPTION_KEY` set on the server (same Fernet-key
+pattern as `GOOGLE_TOKEN_ENCRYPTION_KEY`); `/2fa/setup` returns `503`
+if it isn't.
+
 ### Exporting and deleting your own data (Batch 12.5)
 
 - `GET /auth/me/export` downloads a JSON file with everything about the
@@ -150,6 +186,8 @@ Keyed by client IP. Exceeding a limit returns `429 Too Many Requests`.
 | `POST /auth/verify-email` | 10/minute |
 | `GET /auth/me/export` | 5/minute |
 | `DELETE /auth/me` | 3/minute |
+| `POST /auth/2fa/verify-login` | 5/minute |
+| `POST /auth/2fa/setup`, `/enable`, `/disable`, `/recovery-codes` | 10/minute |
 | Everything else | 120/minute (default) |
 
 (See `app/core/rate_limit.py`.)
