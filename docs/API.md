@@ -124,8 +124,8 @@ response never reveals what exists.
 | Role | Can do |
 |---|---|
 | **Viewer** | Read everything the business shows: dashboard, analytics, transactions (including CSV export), alerts, import history, saved simulations, branches, the team list, subscription and integration status. Also use tools that change nothing: the what-if preview (`POST /simulate`), the AI assistant and chat history. |
-| **Member** | Everyday work: upload and confirm imports, add and correct transactions by hand (`POST` / `PATCH .../transactions`), run Google Sheets / Excel syncs, run alert detection and mark alerts read/resolved/dismissed, save and delete simulations, add and edit branches. |
-| **Admin** | Set up and manage: connect, configure and disconnect Google Sheets and Excel/OneDrive (including choosing the file and mapping columns), invite / change / remove team members, delete branches, delete transactions (`DELETE .../transactions/{id}`), read the audit log, start a plan upgrade (`POST .../billing/checkout`). |
+| **Member** | Everyday work: upload and confirm imports, add and correct transactions and expenses by hand (`POST` / `PATCH .../transactions`, `.../expenses`), run Google Sheets / Excel syncs, run alert detection and mark alerts read/resolved/dismissed, save and delete simulations, add and edit branches. |
+| **Admin** | Set up and manage: connect, configure and disconnect Google Sheets and Excel/OneDrive (including choosing the file and mapping columns), invite / change / remove team members, delete branches, delete transactions and expenses (`DELETE .../transactions/{id}`, `.../expenses/{id}`), read the audit log, start a plan upgrade (`POST .../billing/checkout`). |
 | **Owner** | Everything an admin can. The business's creator; the owner role can't be assigned, changed or removed. Nothing is owner-only yet. |
 
 Why integration setup is admin-only: listing spreadsheets or workbooks
@@ -147,6 +147,39 @@ sync remembers its original fingerprint (`transaction_tombstones`), so the
 next sync or re-upload does not put the original row back or insert it as a
 duplicate beside the corrected one. Deleting a manually entered sale leaves
 no such record.
+
+### Operating expenses and net profit
+
+Operating expenses are the running costs that are **not** the cost of the
+goods sold (rent, salaries, transport, electricity, airtime ...). The cost
+of goods stays on each transaction (`cost_price`) and still produces
+*gross profit*; expenses come off that to give *net profit*.
+
+| Route | Who | What |
+|---|---|---|
+| `GET /businesses/{id}/expenses` | any role | Paginated list, newest first. Filters: `start_date`, `end_date`, `category` (case-insensitive), `q` (searches category and note), `branch_id`. Also returns `total_amount` for the whole filtered set. |
+| `GET .../expenses/summary` | any role | Total, count and a per-category breakdown (largest first, with `share_percent`) for the same filters. |
+| `GET .../expenses/categories` | any role | Categories already used, then suggested ones not yet used. |
+| `POST .../expenses` | member | Add one. `date`, `category` and `amount` (> 0) are required; `description` and `branch_id` optional. |
+| `PATCH .../expenses/{id}` | member | Change only the fields sent; `description` and `branch_id` can be cleared with `null`. |
+| `DELETE .../expenses/{id}` | admin | Remove one. |
+
+Writes are audit-logged (`expense.created`, `expense.updated`,
+`expense.deleted`). Categories are free text; the breakdown groups them
+case-insensitively, so "rent" and "Rent" are one line.
+
+`GET .../analytics/summary` now also returns `operating_expenses`,
+`expense_count`, `net_profit` and `net_profit_margin` for the same window.
+`gross_profit` is unchanged. With no expenses recorded, `net_profit` equals
+`gross_profit` and `expense_count` is `0`, which clients should surface
+("no expenses recorded yet") rather than present as a final figure. In a
+single-branch view (`branch_id`), only that branch's expenses count;
+expenses with no branch are shared overhead and appear only in the
+whole-business figures.
+
+The AI assistant gains a `get_operating_expenses` tool, and `get_profit`
+now returns `operating_expenses` and `net_profit`. The existing
+`get_expenses` tool keeps its old meaning (cost of goods sold).
 
 The OAuth redirects (`GET /google/callback`, `GET /microsoft/callback`) sit
 outside `/businesses/{business_id}/...` because the providers send the
