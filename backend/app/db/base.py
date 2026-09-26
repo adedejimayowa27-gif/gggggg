@@ -27,3 +27,5 @@ from app.models.microsoft_integration import MicrosoftIntegration  # noqa: F401
 from app.models.refresh_token import RefreshToken  # noqa: F401
 from app.models.transaction_tombstone import TransactionTombstone  # noqa: F401
 from app.models.expense import Expense  # noqa: F401
+from app.models.product_stock import ProductStock  # noqa: F401
+from app.models.stock_adjustment import StockAdjustment  # noqa: F401
