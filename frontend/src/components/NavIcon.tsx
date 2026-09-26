@@ -12,6 +12,7 @@ export type NavIconName =
   | "overview"
   | "transactions"
   | "expenses"
+  | "stock"
   | "products"
   | "analytics"
   | "ai"
@@ -50,6 +51,15 @@ function IconShape({ name }: { name: NavIconName }) {
         <>
           <path d="M5 2.5H15V17.5L12.5 16L10 17.5L7.5 16L5 17.5Z" strokeLinejoin="round" />
           <path d="M8 7H12M8 10.5H12" />
+        </>
+      );
+    case "stock":
+      // Stacked boxes/crates.
+      return (
+        <>
+          <path d="M3 8H8V13H3Z" strokeLinejoin="round" />
+          <path d="M10 8H15V13H10Z" strokeLinejoin="round" />
+          <path d="M6.5 3H11.5V8H6.5Z" strokeLinejoin="round" />
         </>
       );
     case "products":
