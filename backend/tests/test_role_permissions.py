@@ -45,10 +45,11 @@ from app.models.team_member import ROLE_ORDER, TeamMember
 #   viewer  read everything the business shows, plus tools that change nothing
 #           (what-if preview, AI assistant, chat history)
 #   member  + day-to-day work: import data, add or correct a transaction or
-#           expense by hand, run syncs, manage alerts, save or delete
-#           simulations, add or edit branches
+#           expense by hand, add/adjust stock records, run syncs, manage
+#           alerts, save or delete simulations, add or edit branches
 #   admin   + set up integrations, manage the team, delete branches, delete
-#           transactions and expenses, audit log, start a plan upgrade
+#           transactions, expenses and stock records, audit log, start a
+#           plan upgrade
 #   owner   (the business's creator; nothing is owner-only yet, the role
 #           exists so it can be, e.g. deleting the business)
 # --------------------------------------------------------------------------
@@ -77,6 +78,8 @@ _declare(
     ("GET", f"{B}/expenses"),
     ("GET", f"{B}/expenses/summary"),
     ("GET", f"{B}/expenses/categories"),
+    ("GET", f"{B}/stock"),
+    ("GET", f"{B}/stock/{{stock_id}}/adjustments"),
     ("GET", f"{B}/alerts"),
     ("GET", f"{B}/alerts/{{alert_id}}"),
     ("GET", f"{B}/imports"),
@@ -105,6 +108,9 @@ _declare(
     ("PATCH", f"{B}/transactions/{{transaction_id}}"),
     ("POST", f"{B}/expenses"),
     ("PATCH", f"{B}/expenses/{{expense_id}}"),
+    ("POST", f"{B}/stock"),
+    ("PATCH", f"{B}/stock/{{stock_id}}"),
+    ("POST", f"{B}/stock/{{stock_id}}/adjustments"),
     ("POST", f"{B}/alerts/run"),
     ("PATCH", f"{B}/alerts/{{alert_id}}"),
     ("POST", f"{B}/simulations"),
@@ -117,9 +123,11 @@ _declare(
 
 _declare(
     "admin",
+    ("PATCH", B),  # business settings, e.g. the auto-deduct-stock-on-sale toggle
     ("DELETE", f"{B}/branches/{{branch_id}}"),
     ("DELETE", f"{B}/transactions/{{transaction_id}}"),
     ("DELETE", f"{B}/expenses/{{expense_id}}"),
+    ("DELETE", f"{B}/stock/{{stock_id}}"),
     ("POST", f"{B}/team"),
     ("PATCH", f"{B}/team/{{member_id}}"),
     ("DELETE", f"{B}/team/{{member_id}}"),
@@ -308,6 +316,7 @@ BEHAVIOR_CASES = [
     ("list transactions", "GET", "/transactions", "viewer", {}),
     ("list expenses", "GET", "/expenses", "viewer", {}),
     ("expense summary", "GET", "/expenses/summary", "viewer", {}),
+    ("list stock", "GET", "/stock", "viewer", {}),
     ("list alerts", "GET", "/alerts", "viewer", {}),
     ("list branches", "GET", "/branches", "viewer", {}),
     ("what-if preview", "POST", "/simulate", "viewer", {"json": {}}),
@@ -318,6 +327,9 @@ BEHAVIOR_CASES = [
     ("edit a transaction", "PATCH", f"/transactions/{_ANY_ID}", "member", {"json": {}}),
     ("add an expense", "POST", "/expenses", "member", {"json": {}}),
     ("edit an expense", "PATCH", f"/expenses/{_ANY_ID}", "member", {"json": {}}),
+    ("add a stock record", "POST", "/stock", "member", {"json": {}}),
+    ("edit a stock record", "PATCH", f"/stock/{_ANY_ID}", "member", {"json": {}}),
+    ("adjust stock", "POST", f"/stock/{_ANY_ID}/adjustments", "member", {"json": {}}),
     ("run alert detection", "POST", "/alerts/run", "member", {}),
     ("update an alert", "PATCH", f"/alerts/{_ANY_ID}", "member", {"json": {"status": "read"}}),
     ("save a simulation", "POST", "/simulations", "member", {"json": {}}),
@@ -329,6 +341,8 @@ BEHAVIOR_CASES = [
     ("delete a branch", "DELETE", f"/branches/{_ANY_ID}", "admin", {}),
     ("delete a transaction", "DELETE", f"/transactions/{_ANY_ID}", "admin", {}),
     ("delete an expense", "DELETE", f"/expenses/{_ANY_ID}", "admin", {}),
+    ("delete a stock record", "DELETE", f"/stock/{_ANY_ID}", "admin", {}),
+    ("change business settings", "PATCH", "", "admin", {"json": {}}),
     ("invite a teammate", "POST", "/team", "admin", {"json": {}}),
     ("read the audit log", "GET", "/audit-logs", "admin", {}),
     ("start a plan upgrade", "POST", "/billing/checkout", "admin", {"json": {}}),
