@@ -25,6 +25,7 @@ from app.models.google_integration import GoogleIntegration
 from app.models.microsoft_integration import MicrosoftIntegration
 from app.models.branch import Branch
 from app.models.expense import Expense
+from app.models.product_stock import ProductStock
 from app.models.transaction import Transaction
 from app.models.team_member import ROLE_ORDER, TeamMember
 from app.models.user import User
@@ -311,3 +312,15 @@ def ensure_branch_belongs_to_business(db: Session, business: Business, branch_id
     exists = db.query(Branch.id).filter(Branch.id == branch_id, Branch.business_id == business.id).first()
     if not exists:
         raise ValidationError("That branch does not belong to this business.", code="invalid_branch")
+
+
+def get_owned_stock(stock_id: uuid.UUID, business: Business, db: Session) -> ProductStock:
+    """Fetch a stock record scoped to an already-ownership-checked business."""
+    stock = (
+        db.query(ProductStock)
+        .filter(ProductStock.id == stock_id, ProductStock.business_id == business.id)
+        .first()
+    )
+    if not stock:
+        raise NotFoundError("Stock record not found.")
+    return stock
