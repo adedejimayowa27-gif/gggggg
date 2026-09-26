@@ -604,24 +604,101 @@ def detect_unusual_transactions(
 
 
 # ---------------------------------------------------------------------------
-# Detector 7: potential stock shortages -- graceful stub
+# Detector 7: potential stock shortages
 # ---------------------------------------------------------------------------
+
+def _stock_shortage_severity(quantity_on_hand: Decimal, reorder_level: Decimal) -> str:
+    """
+    How urgent a shortage is, by how much of the reorder level remains.
+    At or below zero (out of stock, or auto-deduction has taken it
+    negative) is always CRITICAL. Otherwise the LOWER the remaining
+    share of the reorder level, the more severe -- the inverse
+    direction from every percentage-change detector above, so this
+    doesn't reuse _severity_from_bands (built for "bigger magnitude is
+    worse").
+    """
+    if quantity_on_hand <= 0:
+        return "CRITICAL"
+    ratio = float(quantity_on_hand / reorder_level)
+    if ratio <= 0.25:
+        return "HIGH"
+    if ratio <= 0.5:
+        return "MEDIUM"
+    return "LOW"
 
 
 def detect_stock_shortage(db: Session, business: Business, today: date | None = None) -> list[AlertCandidate]:
     """
-    Always returns no candidates. The Transaction model (and the rest of
-    this app) has no inventory/stock-on-hand field at all -- there is
-    nothing to compute a shortage from. Rather than fabricate a shortage
-    signal from proxy data (which would misrepresent what the business
-    actually has in stock), this detector is a deliberate no-op, kept in
-    the registry (requirement #12) so it's the one place to implement
-    real stock-shortage detection once inventory tracking exists,
-    without touching the orchestrator or any other detector. This is the
-    "gracefully handle unavailable fields" requirement (#11) applied at
-    the detector level: silence, not a guess.
+    Step 13, Batch 3: now that ProductStock exists, a real detector
+    replaces the earlier no-op stub (see that stub's original docstring
+    for why silence, not a guess, was the right call before inventory
+    tracking existed). Flags every stock record at or below its own
+    reorder_level -- a record with reorder_level == 0 is skipped
+    entirely, meaning "not tracking a reorder point for this product",
+    not "reorder as soon as any is sold".
+
+    dedupe_key includes an ISO week bucket (not just the product) so a
+    shortage that persists re-alerts about once a week rather than
+    firing fresh on every detection run, while a genuinely new shortage
+    (or the same product at a different branch) still gets its own
+    alert immediately.
     """
-    return []
+    # Local import -- same reasoning as this module's other local model
+    # imports (e.g. Alert in run_all_detectors): keeps this pure
+    # calculation module free of a hard import-time dependency on every
+    # model it can reference.
+    from app.models.branch import Branch
+    from app.models.product_stock import ProductStock
+
+    reference = today or date.today()
+    week_bucket = reference.strftime("%G-W%V")
+
+    low_stock = (
+        db.query(ProductStock)
+        .filter(
+            ProductStock.business_id == business.id,
+            ProductStock.reorder_level > 0,
+            ProductStock.quantity_on_hand <= ProductStock.reorder_level,
+        )
+        .all()
+    )
+    if not low_stock:
+        return []
+
+    branch_names = dict(
+        db.query(Branch.id, Branch.name).filter(
+            Branch.business_id == business.id, Branch.id.in_({s.branch_id for s in low_stock if s.branch_id})
+        )
+    )
+
+    candidates: list[AlertCandidate] = []
+    for stock in low_stock:
+        severity = _stock_shortage_severity(stock.quantity_on_hand, stock.reorder_level)
+        where = f" at {branch_names[stock.branch_id]}" if stock.branch_id in branch_names else ""
+        out_of_stock = stock.quantity_on_hand <= 0
+        candidates.append(
+            AlertCandidate(
+                alert_type="stock_shortage",
+                severity=severity,
+                title=f"{stock.product} is {'out of stock' if out_of_stock else 'running low'}{where}",
+                message=(
+                    f"{stock.product}{where} has {float(stock.quantity_on_hand):g} left on hand, at or below its "
+                    f"reorder level of {float(stock.reorder_level):g}. "
+                    + ("Restock as soon as you can." if out_of_stock else "Consider restocking soon.")
+                ),
+                affected_product=stock.product,
+                affected_metric="quantity_on_hand",
+                period_start=reference,
+                period_end=reference,
+                supporting_values={
+                    "quantity_on_hand": float(stock.quantity_on_hand),
+                    "reorder_level": float(stock.reorder_level),
+                    "branch_id": str(stock.branch_id) if stock.branch_id else None,
+                },
+                dedupe_key=f"stock_shortage:{stock.id}:{week_bucket}",
+            )
+        )
+    return candidates
 
 
 # ---------------------------------------------------------------------------
