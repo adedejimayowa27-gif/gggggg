@@ -8,7 +8,7 @@ via foreign key, so keep this model lean but stable.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -24,6 +24,12 @@ class Business(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     industry: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Step 13, Batch 3: whether creating/editing/deleting a transaction
+    # should automatically adjust a matching ProductStock record. Off by
+    # default -- a business that has never recorded any stock shouldn't
+    # have every sale silently try to look one up.
+    auto_deduct_stock_on_sale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
