@@ -613,12 +613,15 @@ def execute_confirmed_import(db, import_session_id: str, mapping: dict) -> dict:
     import uuid as uuid_module
 
     from app.models.branch import Branch
+    from app.models.business import Business
     from app.models.import_session import ImportSession
     from app.models.transaction import Transaction
+    from app.services.stock import auto_deduct_for_new_transactions
 
     import_session = db.get(ImportSession, uuid_module.UUID(import_session_id))
     if import_session is None:
         raise ValueError(f"Import session {import_session_id} not found.")
+    business = db.get(Business, import_session.business_id)
 
     valid_rows, row_errors = validate_and_convert_rows(import_session.raw_rows, mapping)
 
@@ -655,20 +658,30 @@ def execute_confirmed_import(db, import_session_id: str, mapping: dict) -> dict:
 
     imported_count = 0
     skipped_count = 0
+    new_transactions: list[Transaction] = []
     for row, fingerprint in zip(valid_rows, fingerprints):
         if fingerprint in existing_fingerprints:
             skipped_count += 1
             continue
-        db.add(
-            Transaction(
-                business_id=import_session.business_id,
-                import_session_id=import_session.id,
-                fingerprint=fingerprint,
-                **row,
-            )
+        transaction = Transaction(
+            business_id=import_session.business_id,
+            import_session_id=import_session.id,
+            fingerprint=fingerprint,
+            **row,
         )
+        db.add(transaction)
+        new_transactions.append(transaction)
         imported_count += 1
         existing_fingerprints.add(fingerprint)  # guards against a duplicate row within this same file
+
+    # Step 13, Batch 3: the session disables autoflush (app/db/session.py),
+    # so every new transaction row must be flushed before a StockAdjustment
+    # can reference one via a foreign key. One bulk pass over the newly-
+    # inserted rows, not a per-row query -- see
+    # auto_deduct_for_new_transactions's docstring.
+    if business is not None and new_transactions:
+        db.flush()
+        auto_deduct_for_new_transactions(db, business, new_transactions)
 
     import_session.confirmed_mapping = mapping
     import_session.imported_row_count = imported_count
