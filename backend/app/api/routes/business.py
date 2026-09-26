@@ -9,11 +9,11 @@ ID -- ownership is checked at the query level, not just at creation time.
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_owned_business
+from app.api.deps import get_current_user, get_owned_business, require_business_role
 from app.db.session import get_db
 from app.models.business import Business
 from app.models.user import User
-from app.schemas.business import BusinessCreate, BusinessOut
+from app.schemas.business import BusinessCreate, BusinessOut, BusinessUpdate
 from app.services.team import create_owner_membership, get_user_businesses
 from app.services.billing import check_max_businesses, create_free_subscription
 from app.services.audit import client_ip, log_action
@@ -70,4 +70,34 @@ def list_businesses(
 def get_business(
     business: Business = Depends(get_owned_business),
 ):
+    return BusinessOut.model_validate(business)
+
+
+@router.patch("/{business_id}", response_model=BusinessOut)
+def update_business(
+    payload: BusinessUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(require_business_role("admin")),
+):
+    """
+    Changes only the fields sent. Currently covers the business's name,
+    industry, and its stock-tracking setting (Step 13, Batch 3:
+    auto_deduct_stock_on_sale -- whether creating/editing/deleting a
+    transaction automatically adjusts a matching stock record).
+    """
+    changes = {field: getattr(payload, field) for field in payload.model_fields_set}
+    changed_fields = [f for f, value in changes.items() if getattr(business, f) != value]
+    if changed_fields:
+        for field in changed_fields:
+            setattr(business, field, changes[field])
+        db.commit()
+        db.refresh(business)
+
+        log_action(
+            db, "business.updated", business_id=business.id, actor_user_id=current_user.id,
+            target_type="business", target_id=str(business.id),
+            details={"fields": sorted(changed_fields)}, ip_address=client_ip(request),
+        )
     return BusinessOut.model_validate(business)
