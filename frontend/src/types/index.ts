@@ -45,6 +45,8 @@ export interface Business {
   owner_id: string;
   created_at: string;
   updated_at: string;
+  // Step 13, Batch 3: whether a sale automatically adjusts matching stock.
+  auto_deduct_stock_on_sale: boolean;
 }
 
 export const STANDARD_FIELDS = [
@@ -561,4 +563,45 @@ export interface ExpenseSummary {
   total: string;
   count: number;
   by_category: ExpenseCategoryTotal[];
+}
+
+// --- Inventory / stock (Step 13, Batch 3) ----------------------------------
+
+export interface Stock {
+  id: string;
+  business_id: string;
+  branch_id: string | null;
+  product: string;
+  quantity_on_hand: string;
+  reorder_level: string;
+  updated_at: string;
+  is_low: boolean;
+}
+
+export interface PaginatedStock {
+  items: Stock[];
+  total: number;
+  page: number;
+  page_size: number;
+  /** Count of items at or below their reorder level, across the whole
+   * filtered set, not just this page. */
+  low_stock_count: number;
+}
+
+export type StockAdjustmentReason = "restock" | "damage" | "correction";
+
+export interface StockAdjustment {
+  id: string;
+  reason: string;
+  delta: string;
+  resulting_quantity: string;
+  note: string | null;
+  related_transaction_id: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+}
+
+export interface StockAdjustmentResult {
+  stock: Stock;
+  adjustment: StockAdjustment;
 }
