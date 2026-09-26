@@ -21,6 +21,7 @@ import ComingSoon from "@/components/ComingSoon";
 import GoogleIntegrationCard from "@/components/GoogleIntegrationCard";
 import MicrosoftIntegrationCard from "@/components/MicrosoftIntegrationCard";
 import BranchManager from "@/components/BranchManager";
+import InventorySettingsCard from "@/components/InventorySettingsCard";
 import styles from "./settings.module.css";
 
 function OAuthResultNotice() {
@@ -83,6 +84,7 @@ function SettingsContent() {
       <GoogleIntegrationCard businessId={primaryBusiness.id} role={currentUserRole} />
       <MicrosoftIntegrationCard businessId={primaryBusiness.id} role={currentUserRole} />
       <BranchManager businessId={primaryBusiness.id} role={currentUserRole} />
+      <InventorySettingsCard business={primaryBusiness} role={currentUserRole} />
     </div>
   );
 }
