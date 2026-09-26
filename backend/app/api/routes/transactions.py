@@ -16,8 +16,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Query as SAQuery, Session
 
-from app.api.deps import get_current_user, get_owned_business, get_owned_transaction, require_business_role
-from app.core.exceptions import ValidationError
+from app.api.deps import (
+    ensure_branch_belongs_to_business,
+    get_current_user,
+    get_owned_business,
+    get_owned_transaction,
+    require_business_role,
+)
 from app.db.session import get_db
 from app.models.branch import Branch
 from app.models.business import Business
@@ -27,6 +32,7 @@ from app.schemas.transaction import PaginatedTransactions, TransactionCreate, Tr
 from app.services.audit import client_ip, log_action
 from app.services.billing import check_max_transactions_this_month
 from app.services.import_pipeline import compute_fingerprint
+from app.services.stock import auto_deduct_for_transaction, reverse_linked_sale_adjustment
 from app.services.transactions import remember_imported_fingerprint
 
 router = APIRouter(prefix="/businesses/{business_id}/transactions", tags=["transactions"])
@@ -221,16 +227,6 @@ def list_transactions(
 _FINGERPRINT_FIELDS = ("date", "product", "quantity", "selling_price", "cost_price")
 
 
-def _ensure_branch_belongs_to_business(db: Session, business: Business, branch_id: uuid.UUID | None) -> None:
-    if branch_id is None:
-        return
-    exists = (
-        db.query(Branch.id).filter(Branch.id == branch_id, Branch.business_id == business.id).first()
-    )
-    if not exists:
-        raise ValidationError("That branch does not belong to this business.", code="invalid_branch")
-
-
 def _canonical(value: Decimal | None) -> Decimal | None:
     """Drop trailing zeros (2.500 -> 2.5, 10.00 -> 10) so the fingerprint
     reads the way a spreadsheet cell would, whether the number was typed
@@ -262,7 +258,7 @@ def create_transaction(
     unlike an import, a person typing a sale in means it.
     """
     check_max_transactions_this_month(db, business)
-    _ensure_branch_belongs_to_business(db, business, payload.branch_id)
+    ensure_branch_belongs_to_business(db, business, payload.branch_id)
 
     transaction = Transaction(
         id=uuid.uuid4(),
@@ -272,6 +268,13 @@ def create_transaction(
     )
     transaction.fingerprint = _fingerprint_for(transaction)
     db.add(transaction)
+    # Step 13, Batch 3: the session disables autoflush (app/db/session.py),
+    # so the transaction row must be flushed before a StockAdjustment can
+    # reference its id via a foreign key -- same commit as the insert
+    # either way, so a sale and its stock deduction can never end up out
+    # of step.
+    db.flush()
+    auto_deduct_for_transaction(db, business, transaction, user_id=current_user.id)
     db.commit()
     db.refresh(transaction)
 
@@ -303,11 +306,20 @@ def update_transaction(
     changes = {field: getattr(payload, field) for field in payload.model_fields_set}
 
     if "branch_id" in changes:
-        _ensure_branch_belongs_to_business(db, business, changes["branch_id"])
+        ensure_branch_belongs_to_business(db, business, changes["branch_id"])
 
     changed_fields = [f for f, value in changes.items() if getattr(transaction, f) != value]
     if not changed_fields:
         return TransactionOut.model_validate(transaction)
+
+    # Step 13, Batch 3: a stock deduction tied to this transaction is keyed
+    # off product/quantity/branch, so any of those changing means the old
+    # deduction no longer reflects reality -- reverse it before applying the
+    # edit, then (if stock tracking is on) re-deduct under the new values.
+    # This runs whether or not the change also touched the fingerprint.
+    stock_relevant_change = any(f in ("product", "quantity", "branch_id") for f in changed_fields)
+    if stock_relevant_change:
+        reverse_linked_sale_adjustment(db, transaction.id)
 
     for field in changed_fields:
         setattr(transaction, field, changes[field])
@@ -315,6 +327,9 @@ def update_transaction(
     if any(f in _FINGERPRINT_FIELDS for f in changed_fields):
         remember_imported_fingerprint(db, transaction)  # tombstones the OLD fingerprint
         transaction.fingerprint = _fingerprint_for(transaction)
+
+    if stock_relevant_change:
+        auto_deduct_for_transaction(db, business, transaction, user_id=current_user.id)
 
     db.commit()
     db.refresh(transaction)
@@ -349,6 +364,9 @@ def delete_transaction(
         "selling_price": str(transaction.selling_price),
         "was_imported": transaction.import_session_id is not None,
     }
+    # Step 13, Batch 3: give back whatever this sale deducted, if anything,
+    # before the transaction (and its link to that deduction) is gone.
+    reverse_linked_sale_adjustment(db, transaction.id)
     remember_imported_fingerprint(db, transaction)
     db.delete(transaction)
     db.commit()
