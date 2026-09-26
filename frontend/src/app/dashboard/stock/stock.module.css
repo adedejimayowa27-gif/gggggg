@@ -1,0 +1,336 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--paper);
+  margin-bottom: 0.35rem;
+}
+
+.subtitle {
+  max-width: 620px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--sage);
+}
+
+.muted {
+  color: var(--sage);
+  font-size: 0.85rem;
+}
+
+.addButton {
+  padding: 0.55rem 0.95rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--gold);
+  color: #14151a;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.addButton:hover {
+  opacity: 0.9;
+}
+
+/* ---------- Filters ---------- */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.chip {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--clay);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--clay);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: rgba(200, 90, 70, 0.1);
+}
+
+.chipActive {
+  background: var(--clay);
+  color: #fff;
+}
+
+.control {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--paper);
+  font-size: 0.85rem;
+  font-family: inherit;
+  color-scheme: dark;
+}
+
+.control:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.searchForm {
+  display: flex;
+  flex: 1;
+  gap: 0.4rem;
+  min-width: 220px;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.secondaryButton {
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--paper);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.secondaryButton:hover {
+  border-color: var(--gold);
+}
+
+.successText {
+  color: var(--leaf);
+  font-size: 0.82rem;
+}
+
+.errorText {
+  color: var(--clay);
+  font-size: 0.82rem;
+}
+
+/* ---------- Table ---------- */
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+}
+
+.table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.65rem 0.9rem;
+  background: var(--surface);
+  color: var(--sage);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--surface-border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 0.65rem 0.9rem;
+  border-bottom: 1px solid var(--surface-border);
+  color: var(--paper);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: var(--surface-active);
+}
+
+.numeric {
+  text-align: right !important;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.productCell {
+  font-weight: 600;
+}
+
+.lowBadge {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--clay);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.okBadge {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--surface-active);
+  color: var(--sage);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.skeleton {
+  display: block;
+  height: 0.8rem;
+  width: 70%;
+  border-radius: 4px;
+  background: var(--surface-active);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.rowActions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.rowButton,
+.rowDeleteButton,
+.confirmDeleteButton {
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-border);
+  background: transparent;
+  color: var(--paper);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rowButton:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.rowDeleteButton {
+  color: var(--clay);
+}
+
+.rowDeleteButton:hover {
+  border-color: var(--clay);
+}
+
+.confirmDeleteButton {
+  border-color: var(--clay);
+  background: var(--clay);
+  color: #fff;
+}
+
+.confirmDeleteButton:hover:not(:disabled) {
+  background: var(--clay-deep);
+}
+
+.rowButton:disabled,
+.confirmDeleteButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------- Empty state ---------- */
+.empty {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  border: 1px dashed var(--surface-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.emptyTitle {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.emptyBody {
+  max-width: 420px;
+  font-size: 0.85rem;
+  color: var(--sage);
+}
+
+/* ---------- Pagination ---------- */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--sage);
+}
+
+.pageButtons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pageButton {
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-border);
+  background: transparent;
+  color: var(--paper);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.pageButton:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: var(--surface);
+}
+
+.pageButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 560px) {
+  .filters > * {
+    flex: 1 1 100%;
+  }
+}
