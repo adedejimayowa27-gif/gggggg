@@ -32,6 +32,7 @@ from app.services.google_sheets import fetch_sheet_values
 from app.services.import_pipeline import compute_fingerprint, suggest_mapping, validate_and_convert_rows
 from app.services.sheets_import import parse_sheet_values
 from app.services.billing import check_max_transactions_this_month
+from app.services.stock import auto_deduct_for_new_transactions
 from app.services.transactions import existing_fingerprints as get_existing_fingerprints
 
 
@@ -135,20 +136,30 @@ def sync_now(db: Session, business: Business, integration: GoogleIntegration) ->
 
     imported_count = 0
     skipped_count = 0
+    new_transactions = []
     for row, fingerprint in zip(valid_rows, fingerprints):
         if fingerprint in existing_fingerprints:
             skipped_count += 1
             continue
-        db.add(
-            Transaction(
-                business_id=business.id,
-                import_session_id=import_session.id,
-                fingerprint=fingerprint,
-                **row,
-            )
+        transaction = Transaction(
+            business_id=business.id,
+            import_session_id=import_session.id,
+            fingerprint=fingerprint,
+            **row,
         )
+        db.add(transaction)
+        new_transactions.append(transaction)
         imported_count += 1
         existing_fingerprints.add(fingerprint)  # guards against duplicate rows within the same sheet/run
+
+    # Step 13, Batch 3: the session disables autoflush (app/db/session.py),
+    # so every new transaction row must be flushed before a StockAdjustment
+    # can reference one via a foreign key. One bulk pass over the newly-
+    # inserted rows, not a per-row query -- see
+    # auto_deduct_for_new_transactions's docstring.
+    if new_transactions:
+        db.flush()
+        auto_deduct_for_new_transactions(db, business, new_transactions)
 
     import_session.imported_row_count = imported_count
     import_session.skipped_duplicate_count = skipped_count
