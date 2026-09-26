@@ -21,3 +21,14 @@ class BusinessOut(BaseModel):
     owner_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    # Step 13, Batch 3: whether creating/editing/deleting a transaction
+    # automatically adjusts a matching stock record.
+    auto_deduct_stock_on_sale: bool
+
+
+class BusinessUpdate(BaseModel):
+    """Partial update (PATCH): only fields sent change."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    industry: str | None = Field(default=None, max_length=255)
+    auto_deduct_stock_on_sale: bool | None = None
