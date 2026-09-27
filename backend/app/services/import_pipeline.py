@@ -47,6 +47,7 @@ STANDARD_FIELDS = [
 ]
 OPTIONAL_FIELDS = [f for f in STANDARD_FIELDS if f not in REQUIRED_FIELDS]
 
+
 # Known header variants for each standard field, used for automatic
 # column-mapping suggestions. Add more synonyms here as real-world files
 # reveal new naming patterns -- this list is the whole point of "handle
@@ -87,6 +88,34 @@ FIELD_SYNONYMS: dict[str, list[str]] = {
     "branch": [
         "branch", "branch name", "location", "store", "store name", "outlet",
     ],
+}
+
+# Step 13, Batch 3.1: the same upload -> map columns -> confirm pipeline,
+# pointed at Expense instead of Transaction. Expenses have their own,
+# much smaller field schema -- a category and an amount, not a
+# product/quantity/price -- so this is a parallel set of constants and
+# functions (validate_and_convert_expense_rows / execute_confirmed_
+# expense_import) rather than a shoehorned reuse of the transaction ones.
+# parse_upload, suggest_mapping and normalize_header are genuinely
+# schema-agnostic (they only look at header text and raw cell values) and
+# are shared as-is.
+EXPENSE_REQUIRED_FIELDS = ["date", "category", "amount"]
+EXPENSE_STANDARD_FIELDS = ["date", "category", "amount", "description", "branch"]
+EXPENSE_OPTIONAL_FIELDS = [f for f in EXPENSE_STANDARD_FIELDS if f not in EXPENSE_REQUIRED_FIELDS]
+
+EXPENSE_FIELD_SYNONYMS: dict[str, list[str]] = {
+    "date": FIELD_SYNONYMS["date"],
+    "category": [
+        "category", "expense category", "type", "expense type",
+        "account", "expense account",
+    ],
+    "amount": [
+        "amount", "expense amount", "cost", "total", "value", "sum", "naira",
+    ],
+    "description": [
+        "description", "note", "notes", "memo", "details", "remarks",
+    ],
+    "branch": FIELD_SYNONYMS["branch"],
 }
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
@@ -215,7 +244,11 @@ def _read_preview_rows_xlsx(file_bytes: bytes, max_rows: int) -> list[list]:
         workbook.close()
 
 
-def suggest_mapping(headers: list[str]) -> dict[str, str | None]:
+def suggest_mapping(
+    headers: list[str],
+    standard_fields: list[str] = STANDARD_FIELDS,
+    field_synonyms: dict[str, list[str]] = FIELD_SYNONYMS,
+) -> dict[str, str | None]:
     """
     Suggest which uploaded column corresponds to each standard field.
 
@@ -223,17 +256,23 @@ def suggest_mapping(headers: list[str]) -> dict[str, str | None]:
     ...} using the *original* header text as the value, so the frontend can
     show it back to the user unchanged. Fields with no confident match are
     set to None and left for the user to map manually.
+
+    `standard_fields`/`field_synonyms` default to the transaction schema
+    (unchanged behaviour for every existing caller); Step 13, Batch 3.1
+    passes EXPENSE_STANDARD_FIELDS/EXPENSE_FIELD_SYNONYMS instead when
+    suggesting a mapping for an expense import, so the same matching
+    logic serves both without duplicating it.
     """
     normalized_headers = {h: normalize_header(h) for h in headers}
-    mapping: dict[str, str | None] = {field: None for field in STANDARD_FIELDS}
+    mapping: dict[str, str | None] = {field: None for field in standard_fields}
     used_headers: set[str] = set()
 
     # Pass 1: exact match against known synonyms.
-    for field in STANDARD_FIELDS:
+    for field in standard_fields:
         for original, normalized in normalized_headers.items():
             if original in used_headers:
                 continue
-            if normalized in FIELD_SYNONYMS[field]:
+            if normalized in field_synonyms[field]:
                 mapping[field] = original
                 used_headers.add(original)
                 break
@@ -241,13 +280,13 @@ def suggest_mapping(headers: list[str]) -> dict[str, str | None]:
     # Pass 2: loose "contains" match for anything still unmapped, e.g. a
     # header like "Total Qty" contains "qty" even though it's not an exact
     # synonym match.
-    for field in STANDARD_FIELDS:
+    for field in standard_fields:
         if mapping[field] is not None:
             continue
         for original, normalized in normalized_headers.items():
             if original in used_headers:
                 continue
-            if any(syn in normalized for syn in FIELD_SYNONYMS[field]):
+            if any(syn in normalized for syn in field_synonyms[field]):
                 mapping[field] = original
                 used_headers.add(original)
                 break
@@ -532,6 +571,120 @@ def validate_and_convert_rows(
     return valid_rows, row_errors
 
 
+def validate_and_convert_expense_rows(
+    raw_rows: list[dict], mapping: dict[str, str | None]
+) -> tuple[list[dict], list[dict]]:
+    """
+    Expense counterpart of validate_and_convert_rows: applies a confirmed
+    column mapping to raw rows, validating and converting each one into
+    a dict ready for `Expense(**row)` (after execute_confirmed_expense_
+    import resolves `branch_name` to a real branch_id, same as the
+    transaction path does).
+
+    Returns (valid_rows, row_errors) in the identical shape
+    validate_and_convert_rows uses, so the route/UI layer treats an
+    expense import result exactly like a transaction one.
+    """
+    missing_required = [f for f in EXPENSE_REQUIRED_FIELDS if not mapping.get(f)]
+    if missing_required:
+        raise AppError(
+            f"Missing column mapping for required field(s): {', '.join(missing_required)}.",
+            code="incomplete_mapping",
+        )
+
+    valid_rows: list[dict] = []
+    row_errors: list[dict] = []
+
+    for index, raw_row in enumerate(raw_rows):
+        row_number = index + 1
+        errors: list[str] = []
+        converted: dict = {}
+
+        try:
+            converted["date"] = _parse_date_value(raw_row.get(mapping["date"]))
+        except ValueError as exc:
+            errors.append(str(exc))
+
+        category_value = raw_row.get(mapping["category"])
+        category_str = str(category_value).strip() if category_value is not None else ""
+        if not category_str:
+            errors.append("Category is required.")
+        else:
+            converted["category"] = category_str[:100]
+
+        try:
+            converted["amount"] = _parse_decimal_value(raw_row.get(mapping["amount"]), "amount")
+            if converted["amount"] <= 0:
+                errors.append("Amount must be greater than zero.")
+        except ValueError as exc:
+            errors.append(str(exc))
+
+        converted["description"] = _normalize_optional_text(raw_row, mapping, "description", 255)
+        converted["branch_name"] = _normalize_optional_text(raw_row, mapping, "branch", 255)
+
+        if errors:
+            row_errors.append({"row_number": row_number, "errors": errors})
+        else:
+            valid_rows.append(converted)
+
+    return valid_rows, row_errors
+
+
+def execute_confirmed_expense_import(db, import_session_id: str, mapping: dict) -> dict:
+    """
+    Expense counterpart of execute_confirmed_import: validates+converts
+    every raw row and inserts the valid ones as Expenses, then updates
+    the ImportSession's status/counts.
+
+    Unlike the transaction path, this does NOT skip duplicates -- there
+    is no fingerprint/tombstone mechanism for expenses yet (Batch 1's
+    approach exists specifically because syncs re-fetch the same sales
+    sheet on a schedule; a one-off expense upload doesn't have that
+    problem in the same way). Re-confirming the same file twice will
+    create two sets of Expense rows; delete the extras from the Expenses
+    page if that happens.
+    """
+    import uuid as uuid_module
+
+    from app.models.branch import Branch
+    from app.models.expense import Expense
+    from app.models.import_session import ImportSession
+
+    import_session = db.get(ImportSession, uuid_module.UUID(import_session_id))
+    if import_session is None:
+        raise ValueError(f"Import session {import_session_id} not found.")
+
+    valid_rows, row_errors = validate_and_convert_expense_rows(import_session.raw_rows, mapping)
+
+    branches_by_name = {
+        name.lower(): branch_id
+        for branch_id, name in db.query(Branch.id, Branch.name).filter(
+            Branch.business_id == import_session.business_id
+        )
+    }
+    for row in valid_rows:
+        branch_name = row.pop("branch_name", None)
+        row["branch_id"] = branches_by_name.get(branch_name.lower()) if branch_name else None
+        db.add(Expense(business_id=import_session.business_id, **row))
+
+    import_session.confirmed_mapping = mapping
+    import_session.imported_row_count = len(valid_rows)
+    import_session.skipped_duplicate_count = 0
+    import_session.failed_row_count = len(row_errors)
+    import_session.row_errors = row_errors
+    import_session.status = "completed" if valid_rows else "failed"
+    db.commit()
+
+    return {
+        "id": str(import_session.id),
+        "status": import_session.status,
+        "total_row_count": import_session.total_row_count,
+        "imported_row_count": import_session.imported_row_count,
+        "skipped_duplicate_count": import_session.skipped_duplicate_count,
+        "failed_row_count": import_session.failed_row_count,
+    }
+
+
 def compute_fingerprint(business_id: str, row: dict) -> str:
     """
     Stable SHA-256 hash identifying "this transaction" for duplicate
@@ -701,17 +854,32 @@ def execute_confirmed_import(db, import_session_id: str, mapping: dict) -> dict:
 
 def _handle_import_confirm_job(db, job) -> dict:
     """app.services.jobs handler wrapper for job_type="import_confirm".
-    Unpacks the job's payload and delegates to execute_confirmed_import,
-    then writes the same audit-log entry the old inline route code used
-    to write immediately after committing -- ip_address is always None
-    here since there's no HTTP request on this thread to read it from."""
+    Unpacks the job's payload and delegates to execute_confirmed_import
+    or (Step 13, Batch 3.1) execute_confirmed_expense_import, based on
+    the session's own `target` -- read from the session itself, not the
+    job payload, so this stays correct even if a job is retried after a
+    deploy. Then writes the same audit-log entry the old inline route
+    code used to write immediately after committing -- ip_address is
+    always None here since there's no HTTP request on this thread to
+    read it from."""
+    import uuid as uuid_module
+
+    from app.models.import_session import ImportSession
     from app.services.audit import log_action
 
     payload = job.payload
-    result = execute_confirmed_import(db, payload["import_session_id"], payload["mapping"])
+    import_session = db.get(ImportSession, uuid_module.UUID(payload["import_session_id"]))
+    target = import_session.target if import_session is not None else "transactions"
+
+    if target == "expenses":
+        result = execute_confirmed_expense_import(db, payload["import_session_id"], payload["mapping"])
+        action = "expense_import.completed"
+    else:
+        result = execute_confirmed_import(db, payload["import_session_id"], payload["mapping"])
+        action = "import.completed"
 
     log_action(
-        db, "import.completed", business_id=job.business_id, actor_user_id=job.actor_user_id,
+        db, action, business_id=job.business_id, actor_user_id=job.actor_user_id,
         target_type="import_session", target_id=payload["import_session_id"],
         details={
             "imported_row_count": result["imported_row_count"],
