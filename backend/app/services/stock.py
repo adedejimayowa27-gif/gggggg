@@ -23,7 +23,7 @@ from app.models.business import Business
 from app.models.product_stock import ProductStock
 from app.models.stock_adjustment import StockAdjustment
 from app.models.transaction import Transaction
-from app.schemas.stock import StockOut, StockOutWithFlag
+from app.schemas.stock import StockOut, StockOutWithFlag, StockValueSummary
 
 # Below this share of the reorder level remaining, a shortage is more
 # urgent -- shared with the stock_shortage alert detector so the two
@@ -281,3 +281,25 @@ def low_stock_count(db: Session, *filters) -> int:
         .filter(*filters, ProductStock.reorder_level > 0, ProductStock.quantity_on_hand <= ProductStock.reorder_level)
         .count()
     )
+
+
+def stock_value_summary(db: Session, *filters) -> StockValueSummary:
+    """
+    Total value of stock on hand (quantity_on_hand * unit_cost), among
+    records matching `filters`. A product with no unit_cost set
+    contributes nothing to the total and is counted in unvalued_count
+    instead -- so the figure reads as "value of what's priced" rather
+    than silently understating value with unpriced stock folded in at
+    zero.
+    """
+    rows = db.query(ProductStock.quantity_on_hand, ProductStock.unit_cost).filter(*filters).all()
+    total_value = Decimal(0)
+    valued_count = 0
+    unvalued_count = 0
+    for quantity_on_hand, unit_cost in rows:
+        if unit_cost is None:
+            unvalued_count += 1
+        else:
+            total_value += quantity_on_hand * unit_cost
+            valued_count += 1
+    return StockValueSummary(total_value=total_value, valued_count=valued_count, unvalued_count=unvalued_count)
