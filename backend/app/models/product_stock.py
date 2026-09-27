@@ -52,6 +52,11 @@ class ProductStock(Base):
     # reorder_level == 0, since every quantity is trivially "at or above"
     # a zero threshold.
     reorder_level: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False, default=0)
+    # Optional (Step 13, Batch 3.1): cost per unit, used only to value
+    # stock on hand. Null means "not set" -- never treated as zero by
+    # anything that reads it (a product with no cost is left out of a
+    # value total rather than silently valued at nothing).
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
