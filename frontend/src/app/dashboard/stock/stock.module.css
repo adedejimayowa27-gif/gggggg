@@ -334,3 +334,33 @@
     flex: 1 1 100%;
   }
 }
+
+/* ---------- Stock value ---------- */
+.valueCard {
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.valueLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sage);
+}
+
+.valueAmount {
+  margin-top: 0.3rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.valueHint {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--sage);
+}
