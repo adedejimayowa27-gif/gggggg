@@ -77,10 +77,11 @@ def add_member(db_session, make_user):
 
 @pytest.fixture()
 def make_stock(db_session):
-    def _make(business, product="Rice", quantity="10", reorder="2", branch=None) -> ProductStock:
+    def _make(business, product="Rice", quantity="10", reorder="2", branch=None, unit_cost=None) -> ProductStock:
         stock = ProductStock(
             business_id=business.id, product=product, quantity_on_hand=Decimal(quantity),
             reorder_level=Decimal(reorder), branch_id=branch.id if branch else None,
+            unit_cost=Decimal(unit_cost) if unit_cost is not None else None,
         )
         db_session.add(stock)
         db_session.commit()
@@ -694,3 +695,84 @@ class TestStockShortageDetector:
         other = make_business(owner=make_user())
         make_stock(other, "Rice", quantity="0", reorder="10")
         assert detect_stock_shortage(db_session, business, today=TODAY) == []
+
+
+# ---------------------------------------------------------------------------
+# Stock value (Step 13, Batch 3.1)
+# ---------------------------------------------------------------------------
+class TestStockValue:
+    def test_unit_cost_can_be_set_on_create_and_edited_later(self, client, owner_and_business):
+        owner, business = owner_and_business
+        created = client.post(
+            _url(business), json={"product": "Rice", "quantity_on_hand": "10", "unit_cost": "500"},
+            headers=_headers(owner),
+        ).json()
+        assert Decimal(created["unit_cost"]) == 500
+
+        updated = client.patch(
+            _url(business, f"/{created['id']}"), json={"unit_cost": "550"}, headers=_headers(owner)
+        ).json()
+        assert Decimal(updated["unit_cost"]) == 550
+
+        cleared = client.patch(
+            _url(business, f"/{created['id']}"), json={"unit_cost": None}, headers=_headers(owner)
+        ).json()
+        assert cleared["unit_cost"] is None
+
+    def test_unit_cost_defaults_to_null(self, client, owner_and_business):
+        owner, business = owner_and_business
+        created = client.post(_url(business), json={"product": "Rice"}, headers=_headers(owner)).json()
+        assert created["unit_cost"] is None
+
+    def test_negative_unit_cost_is_rejected(self, client, owner_and_business):
+        owner, business = owner_and_business
+        response = client.post(
+            _url(business), json={"product": "Rice", "unit_cost": "-1"}, headers=_headers(owner)
+        )
+        assert response.status_code == 422
+
+    def test_value_totals_only_priced_products(self, client, owner_and_business, make_stock):
+        owner, business = owner_and_business
+        make_stock(business, "Rice", quantity="10", unit_cost="500")   # value 5000
+        make_stock(business, "Beans", quantity="4", unit_cost="750")   # value 3000
+        make_stock(business, "Salt", quantity="20")                    # no cost set
+        body = client.get(_url(business, "/value"), headers=_headers(owner)).json()
+        assert Decimal(body["total_value"]) == 8000
+        assert body["valued_count"] == 2
+        assert body["unvalued_count"] == 1
+
+    def test_value_with_nothing_tracked(self, client, owner_and_business):
+        owner, business = owner_and_business
+        body = client.get(_url(business, "/value"), headers=_headers(owner)).json()
+        assert Decimal(body["total_value"]) == 0
+        assert body["valued_count"] == 0
+        assert body["unvalued_count"] == 0
+
+    def test_value_respects_the_branch_filter(self, client, db_session, owner_and_business, make_stock):
+        owner, business = owner_and_business
+        branch = Branch(business_id=business.id, name="Ibadan")
+        db_session.add(branch)
+        db_session.commit()
+        make_stock(business, "Rice", quantity="10", unit_cost="500")          # shared, 5000
+        make_stock(business, "Beans", quantity="4", unit_cost="750", branch=branch)  # branch, 3000
+
+        whole = client.get(_url(business, "/value"), headers=_headers(owner)).json()
+        assert Decimal(whole["total_value"]) == 8000
+
+        branch_only = client.get(
+            _url(business, "/value"), params={"branch_id": str(branch.id)}, headers=_headers(owner)
+        ).json()
+        assert Decimal(branch_only["total_value"]) == 3000
+        assert branch_only["valued_count"] == 1
+
+    def test_value_is_scoped_to_the_business(self, client, make_user, make_business, owner_and_business, make_stock):
+        owner, business = owner_and_business
+        other = make_business(owner=make_user())
+        make_stock(other, "Rice", quantity="999", unit_cost="999")
+        body = client.get(_url(business, "/value"), headers=_headers(owner)).json()
+        assert Decimal(body["total_value"]) == 0
+
+    def test_viewer_can_read_stock_value(self, client, owner_and_business, add_member):
+        owner, business = owner_and_business
+        viewer = add_member(business, "viewer")
+        assert client.get(_url(business, "/value"), headers=_headers(viewer)).status_code == 200
