@@ -31,6 +31,9 @@ class StockOut(BaseModel):
     product: str
     quantity_on_hand: Decimal
     reorder_level: Decimal
+    # Optional (Step 13, Batch 3.1): cost per unit, used only to value
+    # stock. Null means "not set" -- never treated as zero.
+    unit_cost: Decimal | None
     updated_at: datetime
 
 
@@ -57,6 +60,7 @@ class StockCreate(BaseModel):
     branch_id: uuid.UUID | None = None
     quantity_on_hand: NonNegativeQty = Decimal(0)
     reorder_level: NonNegativeQty = Decimal(0)
+    unit_cost: Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=2)] | None = None
 
     _validate_product = field_validator("product")(_check_product)
 
@@ -68,6 +72,7 @@ class StockUpdate(BaseModel):
 
     reorder_level: NonNegativeQty | None = None
     branch_id: uuid.UUID | None = None
+    unit_cost: Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=2)] | None = None
     # Sentinel so "branch_id not sent" (leave alone) is distinguishable
     # from "branch_id: null" (move to shared/no branch) -- see
     # model_fields_set usage in the route.
@@ -111,3 +116,13 @@ class StockAdjustmentOut(BaseModel):
 class StockAdjustmentResult(BaseModel):
     stock: StockOutWithFlag
     adjustment: StockAdjustmentOut
+
+
+class StockValueSummary(BaseModel):
+    """Stock on hand, valued at each product's unit_cost. A product with
+    no unit_cost set is left out of `total_value` and counted in
+    `unvalued_count` instead of being silently valued at zero."""
+
+    total_value: Decimal
+    valued_count: int
+    unvalued_count: int
