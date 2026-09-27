@@ -434,3 +434,9 @@
     flex: 1 1 100%;
   }
 }
+
+.headerButtons {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
