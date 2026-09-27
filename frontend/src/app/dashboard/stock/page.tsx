@@ -20,12 +20,18 @@ import StockFormModal from "@/components/StockFormModal";
 import { ApiError } from "@/lib/api";
 import { listBranches } from "@/lib/branches";
 import { hasRole } from "@/lib/permissions";
-import { deleteStock, listStock } from "@/lib/stock";
+import { deleteStock, fetchStockValue, listStock } from "@/lib/stock";
 import type { StockFilters } from "@/lib/stock";
-import type { Branch, PaginatedStock, Stock } from "@/types";
+import type { Branch, PaginatedStock, Stock, StockValueSummary } from "@/types";
 import styles from "./stock.module.css";
 
 const PAGE_SIZE = 25;
+
+const currencyFormatter = new Intl.NumberFormat("en-NG", {
+  style: "currency",
+  currency: "NGN",
+  minimumFractionDigits: 2,
+});
 
 export default function StockPage() {
   const { token } = useAuth();
@@ -40,6 +46,7 @@ export default function StockPage() {
   const [page, setPage] = useState(1);
 
   const [data, setData] = useState<PaginatedStock | null>(null);
+  const [valueSummary, setValueSummary] = useState<StockValueSummary | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +77,13 @@ export default function StockPage() {
       .then(setBranches)
       .catch(() => setBranches([]));
   }, [businessId, token]);
+
+  useEffect(() => {
+    if (!token || !businessId) return;
+    fetchStockValue(businessId, token, branchFilter || undefined)
+      .then(setValueSummary)
+      .catch(() => setValueSummary(null));
+  }, [businessId, token, branchFilter, reloadKey]);
 
   useEffect(() => {
     if (!token || !businessId) return;
@@ -160,6 +174,21 @@ export default function StockPage() {
 
       {currentUserRole !== null && !canEdit && (
         <p className={styles.muted}>Your role can view stock but not add or change it.</p>
+      )}
+
+      {valueSummary && Number(valueSummary.total_value) > 0 && (
+        <div className={styles.valueCard}>
+          <div>
+            <div className={styles.valueLabel}>Stock value</div>
+            <div className={styles.valueAmount}>{currencyFormatter.format(Number(valueSummary.total_value))}</div>
+          </div>
+          {valueSummary.unvalued_count > 0 && (
+            <p className={styles.valueHint}>
+              {valueSummary.unvalued_count} product{valueSummary.unvalued_count === 1 ? "" : "s"} without a cost set
+              {" "}aren&apos;t included — add one on the Edit form to value them too.
+            </p>
+          )}
+        </div>
       )}
 
       <div className={styles.filters}>
