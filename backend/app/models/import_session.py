@@ -41,6 +41,12 @@ class ImportSession(Base):
     # addition changes nothing about the file-upload path's behavior.
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="file")
 
+    # "transactions" | "expenses" (Step 13, Batch 3.1) -- which table this
+    # session's rows are destined for once confirmed. Existing rows get
+    # "transactions" via server_default, matching their only previous
+    # behaviour exactly.
+    target: Mapped[str] = mapped_column(String(20), nullable=False, default="transactions")
+
     # "pending_mapping" -> uploaded and parsed, waiting for user to confirm
     #   column mapping.
     # "queued" -> user confirmed; a background job (Batch 10.9) has been
