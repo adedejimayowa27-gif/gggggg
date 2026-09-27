@@ -26,10 +26,14 @@ from app.schemas.import_session import (
     ImportSessionOut,
 )
 from app.services.import_pipeline import (
+    EXPENSE_FIELD_SYNONYMS,
+    EXPENSE_STANDARD_FIELDS,
     MAX_FILE_SIZE_BYTES,
     parse_upload,
     suggest_mapping,
 )
+
+VALID_TARGETS = ("transactions", "expenses")
 
 router = APIRouter(prefix="/businesses/{business_id}/imports", tags=["imports"])
 
@@ -52,9 +56,23 @@ def _get_owned_import_session(
 @router.post("/upload", response_model=ImportPreviewOut, status_code=status.HTTP_201_CREATED)
 async def upload_import_file(
     file: UploadFile = File(...),
+    target: str = Query(
+        default="transactions",
+        description="Which table this import is destined for once confirmed.",
+    ),
     db: Session = Depends(get_db),
     business: Business = Depends(require_business_role("member")),
 ):
+    """
+    Step 13, Batch 3.1: `target` picks which schema (and therefore which
+    column-mapping suggestions) applies -- "transactions" (the original,
+    unchanged behaviour) or "expenses". Everything else about the upload
+    -> map columns -> confirm flow is identical between the two; only
+    the field list and what confirming actually inserts differs.
+    """
+    if target not in VALID_TARGETS:
+        raise AppError(f"Unsupported import target: {target!r}.", code="invalid_target")
+
     # Bounded read -- caps how much this handler ever holds in memory
     # regardless of how large the actual uploaded file is, rather than
     # buffering the whole thing first and only checking its size
@@ -68,12 +86,16 @@ async def upload_import_file(
             code="file_too_large",
         )
     headers, rows = parse_upload(file_bytes, file.filename or "upload")
-    mapping = suggest_mapping(headers)
+    if target == "expenses":
+        mapping = suggest_mapping(headers, EXPENSE_STANDARD_FIELDS, EXPENSE_FIELD_SYNONYMS)
+    else:
+        mapping = suggest_mapping(headers)
 
     import_session = ImportSession(
         business_id=business.id,
         filename=file.filename or "upload",
         status="pending_mapping",
+        target=target,
         detected_columns=headers,
         raw_rows=rows,
         suggested_mapping=mapping,
@@ -122,8 +144,11 @@ def confirm_import(
 
     # Checked here, synchronously, so a plan-limit rejection is immediate
     # and visible to the user -- not something that only surfaces later
-    # as a failed background job they'd have to go looking for.
-    check_max_transactions_this_month(db, business)
+    # as a failed background job they'd have to go looking for. There is
+    # no equivalent monthly limit on expenses, so this only applies when
+    # this session is actually headed for the transactions table.
+    if import_session.target != "expenses":
+        check_max_transactions_this_month(db, business)
 
     import_session.status = "queued"
     db.commit()
