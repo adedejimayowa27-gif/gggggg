@@ -6,7 +6,14 @@
  * nothing is lost on the way to the server's Decimal columns.
  */
 import { apiFetch } from "@/lib/api";
-import type { PaginatedStock, Stock, StockAdjustment, StockAdjustmentReason, StockAdjustmentResult } from "@/types";
+import type {
+  PaginatedStock,
+  Stock,
+  StockAdjustment,
+  StockAdjustmentReason,
+  StockAdjustmentResult,
+  StockValueSummary,
+} from "@/types";
 
 export interface StockFilters {
   branch_id?: string;
@@ -19,6 +26,7 @@ export interface StockInput {
   branch_id: string | null;
   quantity_on_hand: string;
   reorder_level: string;
+  unit_cost: string | null;
 }
 
 function toQuery(filters: StockFilters, extra: Record<string, string> = {}): string {
@@ -54,7 +62,7 @@ export function createStock(businessId: string, input: StockInput, token: string
 export function updateStock(
   businessId: string,
   stockId: string,
-  input: Partial<Pick<StockInput, "branch_id"> & { reorder_level: string }>,
+  input: Partial<Pick<StockInput, "branch_id" | "reorder_level" | "unit_cost">>,
   token: string
 ): Promise<Stock> {
   return apiFetch<Stock>(`/businesses/${businessId}/stock/${stockId}`, {
@@ -95,4 +103,13 @@ export function createStockAdjustment(
     authToken: token,
     body: JSON.stringify({ reason, quantity, note }),
   });
+}
+
+export function fetchStockValue(
+  businessId: string,
+  token: string,
+  branchId?: string
+): Promise<StockValueSummary> {
+  const query = branchId ? `?branch_id=${branchId}` : "";
+  return apiFetch<StockValueSummary>(`/businesses/${businessId}/stock/value${query}`, { authToken: token });
 }
