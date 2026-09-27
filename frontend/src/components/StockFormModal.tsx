@@ -27,6 +27,7 @@ interface FieldErrors {
   product?: string;
   quantity_on_hand?: string;
   reorder_level?: string;
+  unit_cost?: string;
 }
 
 export default function StockFormModal({ businessId, stock, branches, onClose, onSaved }: Props) {
@@ -36,6 +37,7 @@ export default function StockFormModal({ businessId, stock, branches, onClose, o
   const [product, setProduct] = useState(stock?.product ?? "");
   const [quantityOnHand, setQuantityOnHand] = useState(stock?.quantity_on_hand ?? "0");
   const [reorderLevel, setReorderLevel] = useState(stock?.reorder_level ?? "0");
+  const [unitCost, setUnitCost] = useState(stock?.unit_cost ?? "");
   const [branchId, setBranchId] = useState(stock?.branch_id ?? "");
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -68,6 +70,7 @@ export default function StockFormModal({ businessId, stock, branches, onClose, o
     if (!product.trim()) errors.product = "Enter a product name.";
     if (!isEditing && !isNonNegative(quantityOnHand)) errors.quantity_on_hand = "Enter 0 or more.";
     if (!isNonNegative(reorderLevel)) errors.reorder_level = "Enter 0 or more.";
+    if (unitCost.trim() !== "" && !isNonNegative(unitCost)) errors.unit_cost = "Enter 0 or more.";
     return errors;
   };
 
@@ -82,10 +85,11 @@ export default function StockFormModal({ businessId, stock, branches, onClose, o
 
     setIsSaving(true);
     try {
+      const unitCostValue = unitCost.trim() === "" ? null : unitCost.trim();
       if (stock) {
         const saved = await updateStock(
           businessId, stock.id,
-          { reorder_level: reorderLevel.trim(), branch_id: branchId === "" ? null : branchId },
+          { reorder_level: reorderLevel.trim(), branch_id: branchId === "" ? null : branchId, unit_cost: unitCostValue },
           token
         );
         onSaved(saved, "updated");
@@ -95,6 +99,7 @@ export default function StockFormModal({ businessId, stock, branches, onClose, o
           branch_id: branchId === "" ? null : branchId,
           quantity_on_hand: quantityOnHand.trim(),
           reorder_level: reorderLevel.trim(),
+          unit_cost: unitCostValue,
         };
         const saved = await createStock(businessId, input, token);
         onSaved(saved, "created");
@@ -184,6 +189,24 @@ export default function StockFormModal({ businessId, stock, branches, onClose, o
                 aria-invalid={Boolean(fieldErrors.reorder_level)}
               />
               {fieldErrors.reorder_level && <span className={styles.error}>{fieldErrors.reorder_level}</span>}
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.label}>
+                Cost per unit (₦) <span className={styles.optional}>optional — used to value stock</span>
+              </span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                value={unitCost}
+                onChange={(e) => setUnitCost(e.target.value)}
+                className={styles.input}
+                placeholder="e.g. 500"
+                aria-invalid={Boolean(fieldErrors.unit_cost)}
+              />
+              {fieldErrors.unit_cost && <span className={styles.error}>{fieldErrors.unit_cost}</span>}
             </label>
 
             {branches.length > 0 && (
