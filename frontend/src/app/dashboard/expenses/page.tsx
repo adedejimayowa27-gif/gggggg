@@ -13,6 +13,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
 import ExpenseFormModal from "@/components/ExpenseFormModal";
+import ExpenseImportWizard from "@/components/ExpenseImportWizard";
 import { ApiError } from "@/lib/api";
 import { listBranches } from "@/lib/branches";
 import {
@@ -102,6 +103,7 @@ export default function ExpensesPage() {
 
   const [reloadKey, setReloadKey] = useState(0);
   const [formTarget, setFormTarget] = useState<"new" | Expense | null>(null);
+  const [showImport, setShowImport] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
@@ -245,14 +247,29 @@ export default function ExpensesPage() {
           </p>
         </div>
         {canEdit && (
-          <button type="button" className={styles.addButton} onClick={() => setFormTarget("new")}>
-            + Add expense
-          </button>
+          <div className={styles.headerButtons}>
+            <button type="button" className={styles.secondaryButton} onClick={() => setShowImport((v) => !v)}>
+              {showImport ? "Hide import" : "Import from file"}
+            </button>
+            <button type="button" className={styles.addButton} onClick={() => setFormTarget("new")}>
+              + Add expense
+            </button>
+          </div>
         )}
       </div>
 
       {currentUserRole !== null && !canEdit && (
         <p className={styles.muted}>Your role can view expenses but not add or change them.</p>
+      )}
+
+      {canEdit && showImport && (
+        <ExpenseImportWizard
+          businessId={businessId}
+          onImportComplete={() => {
+            setReloadKey((k) => k + 1);
+            setNotice({ kind: "success", text: "Import complete." });
+          }}
+        />
       )}
 
       {/* ---- Filters ---- */}
