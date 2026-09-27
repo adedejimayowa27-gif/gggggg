@@ -574,8 +574,16 @@ export interface Stock {
   product: string;
   quantity_on_hand: string;
   reorder_level: string;
+  // Optional (Step 13, Batch 3.1): cost per unit, used only to value stock.
+  unit_cost: string | null;
   updated_at: string;
   is_low: boolean;
+}
+
+export interface StockValueSummary {
+  total_value: string;
+  valued_count: number;
+  unvalued_count: number;
 }
 
 export interface PaginatedStock {
