@@ -42,6 +42,7 @@ from app.schemas.stock import (
     StockCreate,
     StockOutWithFlag,
     StockUpdate,
+    StockValueSummary,
 )
 from app.services.audit import client_ip, log_action
 from app.services.stock import (
@@ -50,6 +51,7 @@ from app.services.stock import (
     low_stock_count,
     record_initial_quantity,
     stock_filters,
+    stock_value_summary,
     to_stock_out_with_flag,
 )
 
@@ -88,6 +90,18 @@ def list_stock(
     )
 
 
+@router.get("/value", response_model=StockValueSummary)
+def get_stock_value(
+    branch_id: uuid.UUID | None = Query(default=None, description="Restrict to one branch."),
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_owned_business),
+):
+    """Total value of stock on hand, and how many tracked products have
+    no unit_cost set yet (and so aren't included in the total)."""
+    filters = stock_filters(business.id, branch_id)
+    return stock_value_summary(db, *filters)
+
+
 @router.post("", response_model=StockOutWithFlag, status_code=status.HTTP_201_CREATED)
 def create_stock(
     payload: StockCreate,
@@ -108,6 +122,7 @@ def create_stock(
     stock = ProductStock(
         id=uuid.uuid4(), business_id=business.id, branch_id=payload.branch_id,
         product=payload.product, quantity_on_hand=payload.quantity_on_hand, reorder_level=payload.reorder_level,
+        unit_cost=payload.unit_cost,
     )
     db.add(stock)
     record_initial_quantity(db, stock, current_user.id)
@@ -132,9 +147,10 @@ def update_stock(
     current_user: User = Depends(get_current_user),
     business: Business = Depends(require_business_role("member")),
 ):
-    """Changes only the fields sent -- reorder_level and/or which branch
-    this record belongs to. Quantity is never edited here; use the
-    adjustments endpoint below so every quantity change is logged."""
+    """Changes only the fields sent -- reorder_level, unit_cost, and/or
+    which branch this record belongs to. Quantity is never edited here;
+    use the adjustments endpoint below so every quantity change is
+    logged."""
     stock = get_owned_stock(stock_id, business, db)
     changes = {field: getattr(payload, field) for field in payload.model_fields_set}
 
