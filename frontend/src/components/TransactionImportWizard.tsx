@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { downloadImportTemplate } from "@/lib/onboarding";
 import {
   STANDARD_FIELDS,
   type ColumnMapping,
@@ -66,6 +67,19 @@ export default function TransactionImportWizard({ businessId, onImportComplete }
   const [mapping, setMapping] = useState<ColumnMapping | null>(null);
   const [result, setResult] = useState<ImportConfirmResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+
+  const handleDownloadTemplate = async () => {
+    if (!token) return;
+    setIsDownloadingTemplate(true);
+    try {
+      await downloadImportTemplate(businessId, "transactions", token);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not download the template.");
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
+  };
 
   const reset = () => {
     setStage("idle");
@@ -228,6 +242,17 @@ export default function TransactionImportWizard({ businessId, onImportComplete }
               Upload and preview
             </button>
           </div>
+          <p className={styles.templateRow}>
+            Not sure how to lay out your file?{" "}
+            <button
+              type="button"
+              className={styles.templateLink}
+              onClick={handleDownloadTemplate}
+              disabled={isDownloadingTemplate}
+            >
+              {isDownloadingTemplate ? "Preparing…" : "Download a blank template"}
+            </button>
+          </p>
           {error && <p className={styles.error}>{error}</p>}
         </div>
       )}
