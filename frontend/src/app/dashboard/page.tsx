@@ -10,6 +10,7 @@ import type { AnalyticsSummary, Business, DateRangeValue } from "@/types";
 import MetricCard from "@/components/MetricCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import AlertsPanel from "@/components/AlertsPanel";
+import OnboardingChecklist from "@/components/OnboardingChecklist";
 import AIBusinessBrief from "@/components/AIBusinessBrief";
 import RevenueProfitChart from "@/components/RevenueProfitChart";
 import AIAssistantPanel from "@/components/AIAssistantPanel";
@@ -269,6 +270,8 @@ export default function OverviewPage() {
           </Link>
         </div>
       )}
+
+      {token && <OnboardingChecklist businessId={primaryBusiness.id} />}
 
       {token && <AlertsPanel businessId={primaryBusiness.id} token={token} compact />}
 
