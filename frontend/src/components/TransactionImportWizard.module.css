@@ -344,3 +344,27 @@
     display: none;
   }
 }
+
+/* Step 13, Batch 4: "download a blank template" link under the dropzone
+   (used by both the transaction and the expense import wizards). */
+.templateRow {
+  margin-top: 0.9rem;
+  font-size: 0.8rem;
+  color: var(--sage);
+}
+
+.templateLink {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gold);
+  font-size: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.templateLink:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
