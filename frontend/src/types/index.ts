@@ -613,3 +613,23 @@ export interface StockAdjustmentResult {
   stock: Stock;
   adjustment: StockAdjustment;
 }
+
+// --- Onboarding (Step 13, Batch 4) ------------------------------------------
+
+export interface OnboardingStatus {
+  add_sales: boolean;
+  record_expense: boolean;
+  track_stock: boolean;
+  invite_team: boolean;
+  has_sample_data: boolean;
+}
+
+export interface SampleDataLoaded {
+  transactions: number;
+  expenses: number;
+  stock_records: number;
+}
+
+export interface SampleDataRemoved extends SampleDataLoaded {
+  alerts: number;
+}
