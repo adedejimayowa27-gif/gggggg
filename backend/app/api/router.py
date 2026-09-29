@@ -21,6 +21,7 @@ from app.api.routes import (
     health,
     imports,
     microsoft_integration,
+    onboarding,
     simulations,
     stock,
     team,
@@ -39,6 +40,7 @@ api_router.include_router(imports.router)
 api_router.include_router(transactions.router)
 api_router.include_router(expenses.router)
 api_router.include_router(stock.router)
+api_router.include_router(onboarding.router)
 api_router.include_router(analytics.router)
 api_router.include_router(chat.router)
 api_router.include_router(assistant.router)
