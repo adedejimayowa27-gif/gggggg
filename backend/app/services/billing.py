@@ -150,7 +150,13 @@ def check_max_transactions_this_month(db: Session, business: Business) -> None:
     month_start = date.today().replace(day=1)
     current_count = (
         db.query(Transaction)
-        .filter(Transaction.business_id == business.id, Transaction.created_at >= month_start)
+        .filter(
+            Transaction.business_id == business.id,
+            Transaction.created_at >= month_start,
+            # Onboarding sample data (Batch 4) must never use up a
+            # business's real monthly allowance.
+            Transaction.is_sample.is_(False),
+        )
         .count()
     )
     if current_count >= limit:
