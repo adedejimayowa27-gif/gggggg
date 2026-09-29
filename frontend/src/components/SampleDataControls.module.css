@@ -1,0 +1,64 @@
+.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.primary,
+.secondary,
+.danger {
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.primary {
+  border: none;
+  background: var(--gold);
+  color: #14151a;
+}
+
+.secondary {
+  border: 1px solid var(--surface-border);
+  background: transparent;
+  color: var(--paper);
+}
+
+.secondary:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.danger {
+  border: none;
+  background: var(--clay);
+  color: #fff;
+}
+
+.primary:disabled,
+.secondary:disabled,
+.danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.confirmText {
+  font-size: 0.82rem;
+  color: var(--sage);
+}
+
+.error {
+  width: 100%;
+  color: var(--clay);
+  font-size: 0.8rem;
+}
