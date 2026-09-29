@@ -16,7 +16,7 @@ import uuid
 from datetime import date as date_type, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, String
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -44,6 +44,12 @@ class Expense(Base):
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Step 13, Batch 4: true only for rows inserted by the onboarding
+    # "load sample data" action (app/services/sample_data.py), so they can
+    # be removed later without touching anything the person entered
+    # themselves. Existing and normally-created rows are always false.
+    is_sample: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
