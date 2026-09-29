@@ -9,6 +9,7 @@ through this router.
 import uuid
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_owned_business, require_business_role
@@ -29,6 +30,7 @@ from app.services.import_pipeline import (
     EXPENSE_FIELD_SYNONYMS,
     EXPENSE_STANDARD_FIELDS,
     MAX_FILE_SIZE_BYTES,
+    build_import_template,
     parse_upload,
     suggest_mapping,
 )
@@ -169,6 +171,25 @@ def confirm_import(
         skipped_duplicate_count=import_session.skipped_duplicate_count,
         failed_row_count=import_session.failed_row_count,
         row_errors=[],
+    )
+
+
+@router.get("/template")
+def download_import_template(
+    target: str = Query(default="transactions", description="Which template: transactions or expenses."),
+    business: Business = Depends(get_owned_business),
+):
+    """
+    A blank CSV to fill in and upload: the importer's own column names
+    plus one clearly-marked example row. Declared before /{import_id} so
+    "template" isn't parsed as an import id.
+    """
+    if target not in VALID_TARGETS:
+        raise AppError(f"Unsupported import target: {target!r}.", code="invalid_target")
+    return Response(
+        content=build_import_template(target),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{target}-template.csv"'},
     )
 
 
