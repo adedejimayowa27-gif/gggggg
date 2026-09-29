@@ -685,6 +685,58 @@ def execute_confirmed_expense_import(db, import_session_id: str, mapping: dict) 
     }
 
 
+# Friendly column titles for the downloadable import templates. Each one
+# is a header the auto-mapper recognises on its own (a test uploads the
+# template and checks every column maps without any manual step), so a
+# person who fills the template in and uploads it gets a one-click import.
+_TEMPLATE_HEADERS = {
+    "date": "Date",
+    "product": "Product",
+    "quantity": "Quantity",
+    "selling_price": "Selling Price",
+    "cost_price": "Cost Price",
+    "category": "Category",
+    "customer": "Customer",
+    "payment_method": "Payment Method",
+    "branch": "Branch",
+    "description": "Note",
+    "amount": "Amount",
+}
+
+# One clearly-fake example row per template. If someone uploads the
+# template without deleting it, the row is obviously an example (and easy
+# to spot and delete afterward) rather than plausible-looking fake data.
+_TEMPLATE_EXAMPLES = {
+    "transactions": {
+        "date": "{yesterday}", "product": "Example product (delete this row)", "quantity": "2",
+        "selling_price": "1500", "cost_price": "1000", "category": "Example category",
+        "customer": "Example customer", "payment_method": "Cash", "branch": "",
+    },
+    "expenses": {
+        "date": "{yesterday}", "category": "Example (delete this row)", "amount": "5000",
+        "description": "What this was for", "branch": "",
+    },
+}
+
+
+def build_import_template(target: str) -> str:
+    """CSV text for a blank import template: a header row using the
+    importer's own field lists, plus one clearly-marked example row."""
+    import csv
+    import io
+    from datetime import date, timedelta
+
+    fields = EXPENSE_STANDARD_FIELDS if target == "expenses" else STANDARD_FIELDS
+    example = dict(_TEMPLATE_EXAMPLES["expenses" if target == "expenses" else "transactions"])
+    example["date"] = (date.today() - timedelta(days=1)).isoformat()
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([_TEMPLATE_HEADERS[f] for f in fields])
+    writer.writerow([example.get(f, "") for f in fields])
+    return buffer.getvalue()
+
+
 def compute_fingerprint(business_id: str, row: dict) -> str:
     """
     Stable SHA-256 hash identifying "this transaction" for duplicate
