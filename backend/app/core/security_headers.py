@@ -17,7 +17,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Standard defensive headers on every response. This is an API-only
     backend (no HTML pages rendered here), so there's no Content-Security-
-    Policy here -- that belongs on the frontend (Next.js/Netlify), which
+    Policy here -- that belongs on the frontend (Next.js, hosted on Vercel), which
     is what actually renders pages a browser executes script in.
     """
 
